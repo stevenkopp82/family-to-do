@@ -249,15 +249,19 @@ function clearSetupError() {
 // ============================================================
 
 function subscribeToData() {
+  console.log("[Sub] Subscribing with familyId:", familyId);
+
   // Members
   onSnapshot(
     collection(db, "families", familyId, "members"),
     (snap) => {
+      console.log("[Sub] Members snapshot received, count:", snap.docs.length);
       members = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       renderMemberChips();
       renderMemberCheckboxes();
       renderMembersList();
-    }
+    },
+    (err) => console.error("[Sub] Members permission error:", err.code, err.message)
   );
 
   // Tasks
@@ -265,9 +269,11 @@ function subscribeToData() {
   tasksUnsubscribe = onSnapshot(
     collection(db, "families", familyId, "tasks"),
     (snap) => {
+      console.log("[Sub] Tasks snapshot received, count:", snap.docs.length);
       tasks = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       processDueRecurringTasks().then(() => renderTasks());
-    }
+    },
+    (err) => console.error("[Sub] Tasks permission error:", err.code, err.message)
   );
 }
 
@@ -610,16 +616,19 @@ window.addMember = async function () {
   const name = nameEl.value.trim();
   if (!name) return;
 
+  console.log("[Member] Adding member, familyId:", familyId, "name:", name);
   try {
     await addDoc(collection(db, "families", familyId, "members"), {
       name,
       color: colorEl.value || randomColor(),
       createdAt: serverTimestamp(),
     });
+    console.log("[Member] Member added successfully");
     nameEl.value = "";
   } catch (e) {
+    console.error("[Member] Failed to add member:", e.code, e.message);
     const el = document.getElementById("members-modal-error");
-    el.textContent = "Failed to add member.";
+    el.textContent = `Failed to add member: ${e.message}`;
     el.classList.remove("hidden");
   }
 };
