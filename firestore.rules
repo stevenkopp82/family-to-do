@@ -7,9 +7,15 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Family document: only members of that family (via user doc) can access
+    // Family documents
     match /families/{familyId} {
-      allow read, write: if request.auth != null && isInFamily(familyId);
+      // Allow creation of a NEW family only if the authenticated user is setting
+      // themselves as the owner (used during first-time family setup)
+      allow create: if request.auth != null
+                    && request.resource.data.ownerId == request.auth.uid;
+
+      // Allow read/update/delete only to members of this family
+      allow read, update, delete: if request.auth != null && isInFamily(familyId);
 
       // Members subcollection
       match /members/{memberId} {
@@ -26,6 +32,6 @@ service cloud.firestore {
   // Helper: check if the authenticated user belongs to this family
   function isInFamily(familyId) {
     let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
-    return userDoc.exists && userDoc.data.familyId == familyId;
+    return userDoc.exists() && userDoc.data.familyId == familyId;
   }
 }
