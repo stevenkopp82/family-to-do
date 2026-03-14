@@ -66,20 +66,38 @@ let tasksUnsubscribe = null;
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUser = user;
-    const userDoc = await getDoc(doc(db, "users", user.uid));
-    if (userDoc.exists()) {
+    console.log("[Auth] Signed in as:", user.uid, user.email);
+
+    let userDoc = null;
+    try {
+      userDoc = await getDoc(doc(db, "users", user.uid));
+      console.log("[Auth] users doc exists:", userDoc.exists());
+    } catch (e) {
+      console.error("[Auth] Failed to read users doc:", e.code, e.message);
+    }
+
+    if (userDoc && userDoc.exists()) {
       // Returning user — load their family
       familyId = userDoc.data().familyId;
       localStorage.setItem("familyId_" + user.uid, familyId);
-      const familyDoc = await getDoc(doc(db, "families", familyId));
-      if (familyDoc.exists()) {
-        document.getElementById("header-family-name").textContent =
-          familyDoc.data().name;
+      console.log("[Auth] familyId from users doc:", familyId);
+      try {
+        const familyDoc = await getDoc(doc(db, "families", familyId));
+        if (familyDoc.exists()) {
+          document.getElementById("header-family-name").textContent =
+            familyDoc.data().name;
+          console.log("[Auth] Family loaded:", familyDoc.data().name);
+        } else {
+          console.warn("[Auth] Family doc not found for id:", familyId);
+        }
+      } catch (e) {
+        console.error("[Auth] Failed to read family doc:", e.code, e.message);
       }
       showApp();
       subscribeToData();
     } else {
-      // New Google user — need to set up their family
+      // No users doc — either new user or partial setup
+      console.log("[Auth] No users doc found, entering setup/recovery");
       showFamilySetup();
     }
   } else {
@@ -111,10 +129,18 @@ async function showFamilySetup() {
   // Recovery: if we have a cached familyId hint in localStorage, try to load
   // that family directly (avoids a collection query which rules don't permit).
   const cachedFamilyId = localStorage.getItem("familyId_" + currentUser.uid);
+  console.log("[Setup] cached familyId:", cachedFamilyId);
+
   if (cachedFamilyId) {
     try {
+      console.log("[Setup] Attempting recovery with cached familyId...");
       const famDoc = await getDoc(doc(db, "families", cachedFamilyId));
+      console.log("[Setup] family doc exists:", famDoc.exists());
+      if (famDoc.exists()) {
+        console.log("[Setup] family ownerId:", famDoc.data().ownerId, "current uid:", currentUser.uid);
+      }
       if (famDoc.exists() && famDoc.data().ownerId === currentUser.uid) {
+        console.log("[Setup] Recovery successful, writing users doc...");
         await setDoc(doc(db, "users", currentUser.uid), {
           name: currentUser.displayName || "Family Member",
           email: currentUser.email || "",
@@ -128,11 +154,12 @@ async function showFamilySetup() {
         return;
       }
     } catch (e) {
-      console.warn("Family recovery from cache failed:", e);
+      console.error("[Setup] Recovery failed:", e.code, e.message);
     }
   }
 
   // Truly new user — show the setup form
+  console.log("[Setup] Showing family setup form");
   if (currentUser?.displayName) {
     document.getElementById("setup-member-name").value = currentUser.displayName.split(" ")[0];
   }
