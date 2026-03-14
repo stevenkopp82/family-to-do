@@ -70,6 +70,7 @@ onAuthStateChanged(auth, async (user) => {
     if (userDoc.exists()) {
       // Returning user — load their family
       familyId = userDoc.data().familyId;
+      localStorage.setItem("familyId_" + user.uid, familyId);
       const familyDoc = await getDoc(doc(db, "families", familyId));
       if (familyDoc.exists()) {
         document.getElementById("header-family-name").textContent =
@@ -107,27 +108,28 @@ async function showFamilySetup() {
   document.getElementById("auth-screen").classList.add("hidden");
   document.getElementById("app-screen").classList.add("hidden");
 
-  // Recovery: check if this user already owns a family (in case the users doc
-  // failed to write last time but the family doc was created successfully).
-  try {
-    const q = query(collection(db, "families"), where("ownerId", "==", currentUser.uid));
-    const snap = await getDocs(q);
-    if (!snap.empty) {
-      const existingFamily = snap.docs[0];
-      await setDoc(doc(db, "users", currentUser.uid), {
-        name: currentUser.displayName || "Family Member",
-        email: currentUser.email || "",
-        familyId: existingFamily.id,
-        createdAt: serverTimestamp(),
-      });
-      familyId = existingFamily.id;
-      document.getElementById("header-family-name").textContent = existingFamily.data().name;
-      showApp();
-      subscribeToData();
-      return;
+  // Recovery: if we have a cached familyId hint in localStorage, try to load
+  // that family directly (avoids a collection query which rules don't permit).
+  const cachedFamilyId = localStorage.getItem("familyId_" + currentUser.uid);
+  if (cachedFamilyId) {
+    try {
+      const famDoc = await getDoc(doc(db, "families", cachedFamilyId));
+      if (famDoc.exists() && famDoc.data().ownerId === currentUser.uid) {
+        await setDoc(doc(db, "users", currentUser.uid), {
+          name: currentUser.displayName || "Family Member",
+          email: currentUser.email || "",
+          familyId: cachedFamilyId,
+          createdAt: serverTimestamp(),
+        });
+        familyId = cachedFamilyId;
+        document.getElementById("header-family-name").textContent = famDoc.data().name;
+        showApp();
+        subscribeToData();
+        return;
+      }
+    } catch (e) {
+      console.warn("Family recovery from cache failed:", e);
     }
-  } catch (e) {
-    console.warn("Family recovery check failed:", e);
   }
 
   // Truly new user — show the setup form
@@ -184,6 +186,7 @@ window.createFamily = async function () {
     });
 
     familyId = familyRef.id;
+    localStorage.setItem("familyId_" + currentUser.uid, familyRef.id);
     document.getElementById("header-family-name").textContent = familyName;
     showApp();
     subscribeToData();

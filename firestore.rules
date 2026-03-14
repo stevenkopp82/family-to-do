@@ -9,27 +9,35 @@ service cloud.firestore {
 
     // Family documents
     match /families/{familyId} {
-      // Allow creation of a NEW family only if the authenticated user is setting
-      // themselves as the owner (used during first-time family setup)
+      // Allow creation of a new family only if the authenticated user is the owner
       allow create: if request.auth != null
                     && request.resource.data.ownerId == request.auth.uid;
 
-      // Allow read/update/delete only to members of this family
-      allow read, update, delete: if request.auth != null && isInFamily(familyId);
+      // Allow read/update/delete if the user is the owner OR an established family member
+      allow read, update, delete: if request.auth != null
+                                  && (isOwner(familyId) || isInFamily(familyId));
 
       // Members subcollection
       match /members/{memberId} {
-        allow read, write: if request.auth != null && isInFamily(familyId);
+        allow read, write: if request.auth != null
+                           && (isOwner(familyId) || isInFamily(familyId));
       }
 
       // Tasks subcollection
       match /tasks/{taskId} {
-        allow read, write: if request.auth != null && isInFamily(familyId);
+        allow read, write: if request.auth != null
+                           && (isOwner(familyId) || isInFamily(familyId));
       }
     }
   }
 
-  // Helper: check if the authenticated user belongs to this family
+  // Owner check: does this family doc list the current user as owner?
+  function isOwner(familyId) {
+    let fam = get(/databases/$(database)/documents/families/$(familyId));
+    return fam.exists() && fam.data.ownerId == request.auth.uid;
+  }
+
+  // Member check: does the current user's user doc point to this family?
   function isInFamily(familyId) {
     let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
     return userDoc.exists() && userDoc.data.familyId == familyId;
