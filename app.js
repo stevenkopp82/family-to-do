@@ -6,7 +6,8 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import {
   getAuth,
   GoogleAuthProvider,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   onAuthStateChanged,
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -41,6 +42,13 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
+
+// Handle the result when Google redirects back to the app
+getRedirectResult(auth).catch((e) => {
+  if (e.code && e.code !== "auth/cancelled-popup-request") {
+    console.error("Redirect sign-in error:", e);
+  }
+});
 
 // ---- State ----
 let currentUser = null;
@@ -132,12 +140,11 @@ async function showFamilySetup() {
 window.signInWithGoogle = async function () {
   clearAuthError();
   try {
-    await signInWithPopup(auth, googleProvider);
-    // onAuthStateChanged handles the rest
+    await signInWithRedirect(auth, googleProvider);
+    // Page will redirect to Google, then back here.
+    // onAuthStateChanged + getRedirectResult handle the rest.
   } catch (e) {
-    if (e.code !== "auth/popup-closed-by-user") {
-      showAuthError("Sign-in failed. Please try again.");
-    }
+    showAuthError("Sign-in failed. Please try again.");
   }
 };
 
