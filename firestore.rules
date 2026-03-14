@@ -7,37 +7,18 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Family documents
+    // Family and ALL subcollections — single rule block using ** wildcard
+    match /families/{familyId}/{document=**} {
+      allow read, write: if request.auth != null && isInFamily(familyId);
+    }
+
+    // Family document creation — new user setting up their family
     match /families/{familyId} {
-      // Allow creation of a new family only if the authenticated user is the owner
       allow create: if request.auth != null
                     && request.resource.data.ownerId == request.auth.uid;
-
-      // Allow read/update/delete if the user is the owner OR an established family member
-      allow read, update, delete: if request.auth != null
-                                  && (isOwner(familyId) || isInFamily(familyId));
-
-      // Members subcollection
-      match /members/{memberId} {
-        allow read, write: if request.auth != null
-                           && (isOwner(familyId) || isInFamily(familyId));
-      }
-
-      // Tasks subcollection
-      match /tasks/{taskId} {
-        allow read, write: if request.auth != null
-                           && (isOwner(familyId) || isInFamily(familyId));
-      }
     }
   }
 
-  // Owner check: does this family doc list the current user as owner?
-  function isOwner(familyId) {
-    let fam = get(/databases/$(database)/documents/families/$(familyId));
-    return fam.exists() && fam.data.ownerId == request.auth.uid;
-  }
-
-  // Member check: does the current user's user doc point to this family?
   function isInFamily(familyId) {
     let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
     return userDoc.exists() && userDoc.data.familyId == familyId;
