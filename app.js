@@ -14,23 +14,25 @@ import {
   getFirestore,
   doc,
   getDoc,
+  getDocs,
   setDoc,
   addDoc,
   updateDoc,
   deleteDoc,
   collection,
+  query,
+  where,
   onSnapshot,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-// Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyAA29vEFu7gVTZSAbDwWcfwNw4hSixIPmE",
-  authDomain: "family-to-do-list-33ffa.firebaseapp.com",
-  projectId: "family-to-do-list-33ffa",
- storageBucket: "family-to-do-list-33ffa.firebasestorage.app",
-  messagingSenderId: "1072664901116",
-  appId: "1:1072664901116:web:55369f9f89835cfb8c2e79"
+  apiKey: "REPLACE_WITH_YOUR_API_KEY",
+  authDomain: "REPLACE_WITH_YOUR_AUTH_DOMAIN",
+  projectId: "REPLACE_WITH_YOUR_PROJECT_ID",
+  storageBucket: "REPLACE_WITH_YOUR_STORAGE_BUCKET",
+  messagingSenderId: "REPLACE_WITH_YOUR_MESSAGING_SENDER_ID",
+  appId: "REPLACE_WITH_YOUR_APP_ID",
 };
 
 // ============================================================
@@ -93,10 +95,34 @@ function showAuth() {
   document.getElementById("auth-screen").classList.remove("hidden");
 }
 
-function showFamilySetup() {
+async function showFamilySetup() {
   document.getElementById("auth-screen").classList.add("hidden");
   document.getElementById("app-screen").classList.add("hidden");
-  // Pre-fill the user's Google display name
+
+  // Recovery: check if this user already owns a family (in case the users doc
+  // failed to write last time but the family doc was created successfully).
+  try {
+    const q = query(collection(db, "families"), where("ownerId", "==", currentUser.uid));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const existingFamily = snap.docs[0];
+      await setDoc(doc(db, "users", currentUser.uid), {
+        name: currentUser.displayName || "Family Member",
+        email: currentUser.email || "",
+        familyId: existingFamily.id,
+        createdAt: serverTimestamp(),
+      });
+      familyId = existingFamily.id;
+      document.getElementById("header-family-name").textContent = existingFamily.data().name;
+      showApp();
+      subscribeToData();
+      return;
+    }
+  } catch (e) {
+    console.warn("Family recovery check failed:", e);
+  }
+
+  // Truly new user — show the setup form
   if (currentUser?.displayName) {
     document.getElementById("setup-member-name").value = currentUser.displayName.split(" ")[0];
   }
