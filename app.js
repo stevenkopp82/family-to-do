@@ -66,11 +66,14 @@ async function initAuth() {
     }
   } catch (e) {
     console.error("[Auth] Redirect result error:", e.code, e.message);
+  } finally {
+    sessionStorage.removeItem("googleRedirectPending");
   }
 }
 
-// Kick off redirect result processing immediately, then start listening
-initAuth();
+// Wait for redirect result to fully resolve before listening for auth state.
+// On mobile/new devices the session comes from getRedirectResult, not persistence.
+initAuth().then(() => {
 
 onAuthStateChanged(auth, async (user) => {
   if (user) {
@@ -110,14 +113,21 @@ onAuthStateChanged(auth, async (user) => {
       showFamilySetup();
     }
   } else {
-    currentUser = null;
-    familyId = null;
-    members = [];
-    tasks = [];
-    if (tasksUnsubscribe) tasksUnsubscribe();
-    showAuth();
+    // Only show auth screen if we're not in the middle of a redirect flow.
+    // During a redirect, auth briefly becomes null before resolving.
+    const isRedirecting = sessionStorage.getItem("googleRedirectPending");
+    if (!isRedirecting) {
+      currentUser = null;
+      familyId = null;
+      members = [];
+      tasks = [];
+      if (tasksUnsubscribe) tasksUnsubscribe();
+      showAuth();
+    }
   }
 });
+
+}); // end initAuth().then
 
 function showApp() {
   document.getElementById("auth-screen").classList.add("hidden");
@@ -178,10 +188,10 @@ async function showFamilySetup() {
 window.signInWithGoogle = async function () {
   clearAuthError();
   try {
+    sessionStorage.setItem("googleRedirectPending", "1");
     await signInWithRedirect(auth, googleProvider);
-    // Page will redirect to Google, then back here.
-    // onAuthStateChanged + getRedirectResult handle the rest.
   } catch (e) {
+    sessionStorage.removeItem("googleRedirectPending");
     showAuthError("Sign-in failed. Please try again.");
   }
 };
