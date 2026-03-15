@@ -656,7 +656,7 @@ window.closeMembersModal = function (e) {
   document.getElementById("members-modal").classList.add("hidden");
 };
 
-function renderMembersList(editingId = null) {
+window.renderMembersList = function(editingId = null) {
   const container = document.getElementById("members-list");
   if (!members.length) {
     container.innerHTML = `<p style="font-size:13px;color:var(--text3);margin-bottom:8px">No members yet.</p>`;
@@ -697,7 +697,7 @@ function renderMembersList(editingId = null) {
       </div>
     </div>`;
   }).join("");
-}
+};
 
 const MEMBER_COLORS = [
   {color:"#4f86f7",label:"Blue"},{color:"#2d6a4f",label:"Green"},
