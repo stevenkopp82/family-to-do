@@ -277,13 +277,35 @@ async function processDueRecurringTasks() {
   const today = todayStr();
   for (const task of tasks) {
     if (task.recurrence === "none" || !task.recurrence) continue;
-    if (task.completed && task.nextDue && task.nextDue <= today) {
+    if (!task.completed) continue;
+
+    // Reopen if nextDue has arrived
+    if (task.nextDue && task.nextDue <= today) {
       await updateDoc(doc(db, "families", familyId, "tasks", task.id), {
         completed: false,
         completedAt: null,
         dueDate: task.nextDue,
         nextDue: null,
       });
+      continue;
+    }
+
+    // Safety net: recurring task is completed but has no nextDue set
+    // (can happen for tasks completed before this fix was deployed)
+    if (!task.nextDue) {
+      const nextDue = computeNextDue(task.dueDate || null, task.recurrence);
+      // If nextDue is today or already past, reopen immediately
+      if (nextDue && nextDue <= today) {
+        await updateDoc(doc(db, "families", familyId, "tasks", task.id), {
+          completed: false,
+          completedAt: null,
+          dueDate: nextDue,
+          nextDue: null,
+        });
+      } else if (nextDue) {
+        // Store the computed nextDue so it reopens on the right day
+        await updateDoc(doc(db, "families", familyId, "tasks", task.id), { nextDue });
+      }
     }
   }
 }
@@ -301,13 +323,16 @@ window.testRecurring = async function(titleSubstring) {
 };
 
 function computeNextDue(dueDate, recurrence) {
-  if (!dueDate || recurrence === "none") return null;
-  const d = new Date(dueDate + "T12:00:00");
+  if (recurrence === "none" || !recurrence) return null;
+  // If no due date, base recurrence off today
+  const base = dueDate || todayStr();
+  const d = new Date(base + "T12:00:00");
   if (recurrence === "daily") d.setDate(d.getDate() + 1);
   else if (recurrence === "weekly") d.setDate(d.getDate() + 7);
   else if (recurrence === "biweekly") d.setDate(d.getDate() + 14);
   else if (recurrence === "monthly") d.setMonth(d.getMonth() + 1);
-  return d.toISOString().slice(0, 10);
+  // Use local date string to avoid UTC timezone shifting
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
 function todayStr() {
@@ -610,8 +635,9 @@ window.toggleComplete = async function (taskId) {
 
   const isRecurring = task.recurrence && task.recurrence !== "none";
 
-  if (isRecurring && task.dueDate) {
-    const nextDue = computeNextDue(task.dueDate, task.recurrence);
+  if (isRecurring) {
+    // computeNextDue handles null dueDate by using today as the base
+    const nextDue = computeNextDue(task.dueDate || null, task.recurrence);
     await updateDoc(doc(db, "families", familyId, "tasks", taskId), {
       completed: true,
       completedAt: serverTimestamp(),

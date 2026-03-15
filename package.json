@@ -1,0 +1,12 @@
+{
+  "name": "family-todo-tests",
+  "version": "1.0.0",
+  "description": "Unit tests for Family To-Do logic functions",
+  "scripts": {
+    "test": "jest --verbose",
+    "test:watch": "jest --watch"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0"
+  }
+}
