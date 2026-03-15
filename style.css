@@ -514,3 +514,27 @@ select.input { cursor: pointer; }
   text-decoration: line-through;
   color: var(--text2);
 }
+
+/* ===== MEMBER INLINE EDIT ===== */
+.member-row-editing {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  background: var(--accent-light);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+.member-edit-fields { display: flex; flex-direction: column; }
+.member-edit-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.member-action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  color: var(--text3);
+  transition: all 0.15s;
+}
+.member-action-btn:hover { background: var(--surface2); color: var(--text); }

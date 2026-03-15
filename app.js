@@ -656,23 +656,70 @@ window.closeMembersModal = function (e) {
   document.getElementById("members-modal").classList.add("hidden");
 };
 
-function renderMembersList() {
+function renderMembersList(editingId = null) {
   const container = document.getElementById("members-list");
   if (!members.length) {
     container.innerHTML = `<p style="font-size:13px;color:var(--text3);margin-bottom:8px">No members yet.</p>`;
     return;
   }
-  container.innerHTML = members
-    .map((m) => {
-      const initials = m.name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
-      return `<div class="member-row">
-        <div class="avatar" style="background:${m.color || "#888"}">${initials}</div>
-        <span class="member-name">${escHtml(m.name)}</span>
-        <button class="member-delete" onclick="deleteMember('${m.id}')" title="Remove member">✕</button>
+  container.innerHTML = members.map((m) => {
+    const initials = m.name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
+    if (m.id === editingId) {
+      // Inline edit row
+      const swatches = MEMBER_COLORS.map(({color, label}) => {
+        const sel = color === (m.color || "#4f86f7") ? " selected" : "";
+        return `<div class="color-swatch${sel}" data-color="${color}" style="background:${color}"
+          onclick="document.getElementById('edit-member-color').value='${color}';document.querySelectorAll('#member-edit-swatches .color-swatch').forEach(s=>s.classList.remove('selected'));this.classList.add('selected')"
+          title="${label}"></div>`;
+      }).join("");
+      return `<div class="member-row member-row-editing">
+        <div class="member-edit-fields">
+          <input type="text" id="edit-member-name" class="input" value="${escHtml(m.name)}" placeholder="Name" style="margin-bottom:8px" />
+          <div class="color-swatches" style="margin-top:0">
+            <span class="swatch-label">Color:</span>
+            <div id="member-edit-swatches" class="swatch-row">${swatches}</div>
+            <input type="hidden" id="edit-member-color" value="${m.color || '#4f86f7'}" />
+          </div>
+        </div>
+        <div class="member-edit-actions">
+          <button class="btn btn-primary btn-sm" onclick="saveMemberEdit('${m.id}')">Save</button>
+          <button class="btn btn-ghost btn-sm" onclick="renderMembersList()">Cancel</button>
+        </div>
       </div>`;
-    })
-    .join("");
+    }
+    // Normal row
+    return `<div class="member-row">
+      <div class="avatar" style="background:${m.color || "#888"}">${initials}</div>
+      <span class="member-name">${escHtml(m.name)}</span>
+      <div style="display:flex;gap:4px;margin-left:auto">
+        <button class="member-action-btn" onclick="renderMembersList('${m.id}')" title="Edit member">✏️</button>
+        <button class="member-action-btn" onclick="deleteMember('${m.id}')" title="Remove member">✕</button>
+      </div>
+    </div>`;
+  }).join("");
 }
+
+const MEMBER_COLORS = [
+  {color:"#4f86f7",label:"Blue"},{color:"#2d6a4f",label:"Green"},
+  {color:"#f4845f",label:"Coral"},{color:"#9b59b6",label:"Purple"},
+  {color:"#e67e22",label:"Orange"},{color:"#e91e8c",label:"Pink"},
+  {color:"#1abc9c",label:"Teal"},{color:"#c0392b",label:"Red"},
+];
+
+window.saveMemberEdit = async function(memberId) {
+  const name = document.getElementById("edit-member-name").value.trim();
+  const color = document.getElementById("edit-member-color").value;
+  if (!name) return;
+  try {
+    await updateDoc(doc(db, "families", familyId, "members", memberId), { name, color });
+    // renderMembersList will be called automatically via onSnapshot
+  } catch (e) {
+    console.error("Failed to update member:", e);
+    const el = document.getElementById("members-modal-error");
+    el.textContent = "Failed to save changes.";
+    el.classList.remove("hidden");
+  }
+};
 
 window.addMember = async function () {
   const nameEl = document.getElementById("new-member-name");
