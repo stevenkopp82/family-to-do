@@ -43,13 +43,6 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
 
-// Handle the result when Google redirects back to the app
-getRedirectResult(auth).catch((e) => {
-  if (e.code && e.code !== "auth/cancelled-popup-request") {
-    console.error("Redirect sign-in error:", e);
-  }
-});
-
 // ---- State ----
 let currentUser = null;
 let familyId = null;
@@ -62,6 +55,22 @@ let tasksUnsubscribe = null;
 // ============================================================
 // AUTH
 // ============================================================
+
+// Must process getRedirectResult BEFORE onAuthStateChanged so the
+// session is fully established when the listener fires on mobile.
+async function initAuth() {
+  try {
+    const result = await getRedirectResult(auth);
+    if (result?.user) {
+      console.log("[Auth] Redirect result user:", result.user.email);
+    }
+  } catch (e) {
+    console.error("[Auth] Redirect result error:", e.code, e.message);
+  }
+}
+
+// Kick off redirect result processing immediately, then start listening
+initAuth();
 
 onAuthStateChanged(auth, async (user) => {
   if (user) {
