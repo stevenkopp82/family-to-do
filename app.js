@@ -311,7 +311,15 @@ function computeNextDue(dueDate, recurrence) {
 }
 
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  // Use local date, not UTC — avoids off-by-one errors in non-UTC timezones
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function timestampToLocalDate(ts) {
+  // Converts a Firestore Timestamp or ISO string to a local YYYY-MM-DD string
+  const d = ts?.toDate ? ts.toDate() : new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
 // ============================================================
@@ -343,16 +351,17 @@ function renderTasks() {
 
   const noDue = incomplete.filter((t) => !t.dueDate);
 
-  // Completed today only
-  const completedToday = tasks.filter((t) => {
+  // Completed today only — apply same member filter
+  let completedToday = tasks.filter((t) => {
     if (!t.completed) return false;
     if (!t.completedAt) return false;
-    // completedAt is a Firestore Timestamp
-    const completedDate = t.completedAt.toDate
-      ? t.completedAt.toDate().toISOString().slice(0, 10)
-      : t.completedAt.slice(0, 10);
-    return completedDate === today;
+    return timestampToLocalDate(t.completedAt) === today;
   });
+  if (activeFilter === "unassigned") {
+    completedToday = completedToday.filter((t) => !t.members || t.members.length === 0);
+  } else if (activeFilter !== "all") {
+    completedToday = completedToday.filter((t) => t.members && t.members.includes(activeFilter));
+  }
 
   if (incomplete.length === 0 && completedToday.length === 0) {
     container.innerHTML = `<div class="empty-state">
@@ -496,7 +505,9 @@ window.openTaskModal = function () {
   document.getElementById("task-due").value = "";
   document.getElementById("task-recurrence").value = "none";
   clearTaskError();
-  renderMemberCheckboxes();
+  // Pre-select the currently filtered member (if any)
+  const preselect = (activeFilter !== "all" && activeFilter !== "unassigned") ? [activeFilter] : [];
+  renderMemberCheckboxes(preselect);
   document.getElementById("task-modal").classList.remove("hidden");
 };
 
