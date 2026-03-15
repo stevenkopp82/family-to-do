@@ -560,6 +560,10 @@ window.saveTask = async function () {
 
   const dueDate = document.getElementById("task-due").value || null;
   const recurrence = document.getElementById("task-recurrence").value;
+
+  if (recurrence !== "none" && !dueDate) {
+    return showTaskError("A due date is required for recurring tasks.");
+  }
   const selectedMembers = Array.from(
     document.querySelectorAll(".member-checkbox-item.selected")
   ).map((el) => el.dataset.memberId);
