@@ -488,3 +488,29 @@ select.input { cursor: pointer; }
   .toolbar { flex-direction: column; align-items: stretch; }
   .auth-card { padding: 28px 20px; }
 }
+
+/* ===== COLOR SWATCHES ===== */
+.color-swatches { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.swatch-label { font-size: 12px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.05em; }
+.swatch-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.color-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 3px solid transparent;
+  transition: transform 0.12s, border-color 0.12s;
+}
+.color-swatch:hover { transform: scale(1.15); }
+.color-swatch.selected { border-color: var(--text); transform: scale(1.1); }
+
+/* ===== COMPLETED TASKS ===== */
+.task-card-completed {
+  opacity: 0.6;
+  background: var(--surface2) !important;
+  border-color: var(--border) !important;
+}
+.task-title-completed {
+  text-decoration: line-through;
+  color: var(--text2);
+}

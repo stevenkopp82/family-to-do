@@ -152,8 +152,21 @@
         <div id="members-list" class="members-list"></div>
         <div class="add-member-row">
           <input type="text" id="new-member-name" class="input" placeholder="Member name" />
-          <input type="text" id="new-member-color" class="color-input" placeholder="🎨" title="Pick a color" type="color" value="#4f86f7" />
           <button class="btn btn-primary" onclick="addMember()">Add</button>
+        </div>
+        <div class="color-swatches">
+          <span class="swatch-label">Color:</span>
+          <div class="swatch-row">
+            <div class="color-swatch selected" data-color="#4f86f7" style="background:#4f86f7" onclick="selectMemberColor('#4f86f7')" title="Blue"></div>
+            <div class="color-swatch" data-color="#2d6a4f" style="background:#2d6a4f" onclick="selectMemberColor('#2d6a4f')" title="Green"></div>
+            <div class="color-swatch" data-color="#f4845f" style="background:#f4845f" onclick="selectMemberColor('#f4845f')" title="Coral"></div>
+            <div class="color-swatch" data-color="#9b59b6" style="background:#9b59b6" onclick="selectMemberColor('#9b59b6')" title="Purple"></div>
+            <div class="color-swatch" data-color="#e67e22" style="background:#e67e22" onclick="selectMemberColor('#e67e22')" title="Orange"></div>
+            <div class="color-swatch" data-color="#e91e8c" style="background:#e91e8c" onclick="selectMemberColor('#e91e8c')" title="Pink"></div>
+            <div class="color-swatch" data-color="#1abc9c" style="background:#1abc9c" onclick="selectMemberColor('#1abc9c')" title="Teal"></div>
+            <div class="color-swatch" data-color="#c0392b" style="background:#c0392b" onclick="selectMemberColor('#c0392b')" title="Red"></div>
+          </div>
+          <input type="hidden" id="selected-member-color" value="#4f86f7" />
         </div>
         <div id="members-modal-error" class="auth-error hidden"></div>
       </div>

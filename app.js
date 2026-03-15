@@ -286,7 +286,6 @@ async function processDueRecurringTasks() {
   for (const task of tasks) {
     if (task.recurrence === "none" || !task.recurrence) continue;
     if (task.completed && task.nextDue && task.nextDue <= today) {
-      // Re-open task with next due date
       await updateDoc(doc(db, "families", familyId, "tasks", task.id), {
         completed: false,
         completedAt: null,
@@ -296,6 +295,18 @@ async function processDueRecurringTasks() {
     }
   }
 }
+
+// Quick test helper: open browser console and run testRecurring('task title')
+// to backdate a recurring task's due date to yesterday so it re-opens immediately.
+window.testRecurring = async function(titleSubstring) {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().slice(0, 10);
+  const task = tasks.find(t => t.title.toLowerCase().includes(titleSubstring.toLowerCase()) && t.completed);
+  if (!task) { console.log("No completed task found matching:", titleSubstring); return; }
+  await updateDoc(doc(db, "families", familyId, "tasks", task.id), { nextDue: yesterdayStr });
+  console.log("Set nextDue to yesterday for:", task.title, "— refresh the page to trigger re-open.");
+};
 
 function computeNextDue(dueDate, recurrence) {
   if (!dueDate || recurrence === "none") return null;
@@ -319,27 +330,42 @@ function renderTasks() {
   const container = document.getElementById("task-list");
   const today = todayStr();
 
-  let filtered = tasks.filter((t) => !t.completed);
-  if (activeFilter !== "all") {
-    filtered = filtered.filter(
+  let incomplete = tasks.filter((t) => !t.completed);
+
+  // Apply member filter
+  if (activeFilter === "unassigned") {
+    incomplete = incomplete.filter((t) => !t.members || t.members.length === 0);
+  } else if (activeFilter !== "all") {
+    incomplete = incomplete.filter(
       (t) => t.members && t.members.includes(activeFilter)
     );
   }
 
-  const overdue = filtered
+  const overdue = incomplete
     .filter((t) => t.dueDate && t.dueDate < today)
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 
-  const upcoming = filtered
+  const upcoming = incomplete
     .filter((t) => t.dueDate && t.dueDate >= today)
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 
-  const noDue = filtered.filter((t) => !t.dueDate);
+  const noDue = incomplete.filter((t) => !t.dueDate);
 
-  if (filtered.length === 0) {
+  // Completed today only
+  const completedToday = tasks.filter((t) => {
+    if (!t.completed) return false;
+    if (!t.completedAt) return false;
+    // completedAt is a Firestore Timestamp
+    const completedDate = t.completedAt.toDate
+      ? t.completedAt.toDate().toISOString().slice(0, 10)
+      : t.completedAt.slice(0, 10);
+    return completedDate === today;
+  });
+
+  if (incomplete.length === 0 && completedToday.length === 0) {
     container.innerHTML = `<div class="empty-state">
       <div class="empty-icon">✅</div>
-      <p>${activeFilter === "all" ? "No tasks yet! Add one above." : "No tasks for this member."}</p>
+      <p>${activeFilter === "all" ? "No tasks yet! Add one above." : "No tasks for this filter."}</p>
     </div>`;
     return;
   }
@@ -348,23 +374,28 @@ function renderTasks() {
 
   if (overdue.length) {
     html += `<div class="section-label">⚠️ Overdue</div>`;
-    overdue.forEach((t) => (html += taskCard(t, true)));
+    overdue.forEach((t) => (html += taskCard(t, true, false)));
   }
 
   if (upcoming.length) {
     html += `<div class="section-label">📅 Upcoming</div>`;
-    upcoming.forEach((t) => (html += taskCard(t, false)));
+    upcoming.forEach((t) => (html += taskCard(t, false, false)));
   }
 
   if (noDue.length) {
     html += `<div class="section-label">🗂 No Due Date</div>`;
-    noDue.forEach((t) => (html += taskCard(t, false)));
+    noDue.forEach((t) => (html += taskCard(t, false, false)));
+  }
+
+  if (completedToday.length) {
+    html += `<div class="section-label">✅ Completed Today</div>`;
+    completedToday.forEach((t) => (html += taskCard(t, false, true)));
   }
 
   container.innerHTML = html;
 }
 
-function taskCard(task, isOverdue) {
+function taskCard(task, isOverdue, isCompleted) {
   const memberAvatars = (task.members || [])
     .map((mid) => {
       const m = members.find((x) => x.id === mid);
@@ -379,9 +410,7 @@ function taskCard(task, isOverdue) {
     })
     .join("");
 
-  const dateStr = task.dueDate
-    ? formatDate(task.dueDate)
-    : "";
+  const dateStr = task.dueDate ? formatDate(task.dueDate) : "";
   const dateClass = isOverdue ? "task-date overdue-text" : "task-date";
 
   const recurLabel = task.recurrence && task.recurrence !== "none"
@@ -391,6 +420,22 @@ function taskCard(task, isOverdue) {
   const deleteTitle = task.recurrence && task.recurrence !== "none"
     ? "Delete (stop recurring)"
     : "Delete task";
+
+  if (isCompleted) {
+    return `<div class="task-card task-card-completed">
+      <div class="task-check checked" title="Completed"></div>
+      <div class="task-main">
+        <div class="task-title task-title-completed">${escHtml(task.title)}</div>
+        <div class="task-meta">
+          ${recurLabel}
+          <div class="member-avatars">${memberAvatars}</div>
+        </div>
+      </div>
+      <div class="task-actions">
+        <button class="task-action-btn delete" onclick="deleteTask('${task.id}')" title="${deleteTitle}">🗑</button>
+      </div>
+    </div>`;
+  }
 
   return `<div class="task-card${isOverdue ? " overdue" : ""}">
     <div class="task-check" onclick="toggleComplete('${task.id}')" title="Mark complete"></div>
@@ -429,6 +474,8 @@ function renderMemberChips() {
     const active = activeFilter === m.id ? " chip-active" : "";
     html += `<button class="chip${active}" onclick="setFilter('${m.id}')" style="${active ? `background:${m.color};border-color:${m.color}` : ""}">${escHtml(m.name)}</button>`;
   });
+  const unassignedActive = activeFilter === "unassigned" ? " chip-active" : "";
+  html += `<button class="chip${unassignedActive}" onclick="setFilter('unassigned')" style="${unassignedActive ? "background:#9e9892;border-color:#9e9892" : ""}">Unassigned</button>`;
   row.innerHTML = html;
 }
 
@@ -436,6 +483,14 @@ window.setFilter = function (memberId) {
   activeFilter = memberId;
   renderMemberChips();
   renderTasks();
+};
+
+// Exposed for color swatch selection
+window.selectMemberColor = function (color) {
+  document.querySelectorAll(".color-swatch").forEach(s => s.classList.remove("selected"));
+  const swatch = document.querySelector(`.color-swatch[data-color="${color}"]`);
+  if (swatch) swatch.classList.add("selected");
+  document.getElementById("selected-member-color").value = color;
 };
 
 // ============================================================
@@ -612,19 +667,19 @@ function renderMembersList() {
 
 window.addMember = async function () {
   const nameEl = document.getElementById("new-member-name");
-  const colorEl = document.getElementById("new-member-color");
+  const colorEl = document.getElementById("selected-member-color");
   const name = nameEl.value.trim();
   if (!name) return;
 
-  console.log("[Member] Adding member, familyId:", familyId, "name:", name);
   try {
     await addDoc(collection(db, "families", familyId, "members"), {
       name,
       color: colorEl.value || randomColor(),
       createdAt: serverTimestamp(),
     });
-    console.log("[Member] Member added successfully");
     nameEl.value = "";
+    // Reset swatch selection to first color
+    window.selectMemberColor("#4f86f7");
   } catch (e) {
     console.error("[Member] Failed to add member:", e.code, e.message);
     const el = document.getElementById("members-modal-error");
