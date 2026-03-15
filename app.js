@@ -6,8 +6,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
 import {
   getAuth,
   GoogleAuthProvider,
-  signInWithRedirect,
-  getRedirectResult,
+  signInWithPopup,
   signOut,
   onAuthStateChanged,
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -56,25 +55,6 @@ let tasksUnsubscribe = null;
 // AUTH
 // ============================================================
 
-// Must process getRedirectResult BEFORE onAuthStateChanged so the
-// session is fully established when the listener fires on mobile.
-async function initAuth() {
-  try {
-    const result = await getRedirectResult(auth);
-    if (result?.user) {
-      console.log("[Auth] Redirect result user:", result.user.email);
-    }
-  } catch (e) {
-    console.error("[Auth] Redirect result error:", e.code, e.message);
-  } finally {
-    sessionStorage.removeItem("googleRedirectPending");
-  }
-}
-
-// Wait for redirect result to fully resolve before listening for auth state.
-// On mobile/new devices the session comes from getRedirectResult, not persistence.
-initAuth().then(() => {
-
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUser = user;
@@ -113,21 +93,14 @@ onAuthStateChanged(auth, async (user) => {
       showFamilySetup();
     }
   } else {
-    // Only show auth screen if we're not in the middle of a redirect flow.
-    // During a redirect, auth briefly becomes null before resolving.
-    const isRedirecting = sessionStorage.getItem("googleRedirectPending");
-    if (!isRedirecting) {
-      currentUser = null;
-      familyId = null;
-      members = [];
-      tasks = [];
-      if (tasksUnsubscribe) tasksUnsubscribe();
-      showAuth();
-    }
+    currentUser = null;
+    familyId = null;
+    members = [];
+    tasks = [];
+    if (tasksUnsubscribe) tasksUnsubscribe();
+    showAuth();
   }
 });
-
-}); // end initAuth().then
 
 function showApp() {
   document.getElementById("auth-screen").classList.add("hidden");
@@ -188,11 +161,11 @@ async function showFamilySetup() {
 window.signInWithGoogle = async function () {
   clearAuthError();
   try {
-    sessionStorage.setItem("googleRedirectPending", "1");
-    await signInWithRedirect(auth, googleProvider);
+    await signInWithPopup(auth, googleProvider);
   } catch (e) {
-    sessionStorage.removeItem("googleRedirectPending");
-    showAuthError("Sign-in failed. Please try again.");
+    if (e.code !== "auth/popup-closed-by-user" && e.code !== "auth/cancelled-popup-request") {
+      showAuthError("Sign-in failed. Please try again.");
+    }
   }
 };
 
