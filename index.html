@@ -120,13 +120,15 @@
         <input type="date" id="task-due" class="input" />
 
         <label class="field-label">Recurrence</label>
-        <select id="task-recurrence" class="input">
+        <select id="task-recurrence" class="input" onchange="toggleRecurrenceDaysInput()">
           <option value="none">Does not repeat</option>
           <option value="daily">Daily</option>
           <option value="weekly">Weekly</option>
           <option value="biweekly">Every 2 weeks</option>
           <option value="monthly">Monthly</option>
+          <option value="days">Every X days</option>
         </select>
+        <input type="number" id="task-recurrence-days" class="input" placeholder="Number of days (1-30)" min="1" max="30" style="display:none;margin-top:8px" />
 
         <label class="field-label">Assign to members</label>
         <div id="member-checkboxes" class="member-checkbox-list"></div>

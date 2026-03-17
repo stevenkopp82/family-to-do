@@ -31,6 +31,14 @@ function computeNextDue(dueDate, recurrence) {
     const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
     d.setDate(Math.min(originalDay, daysInMonth));
   }
+  else if (recurrence.startsWith("days:")) {
+    const days = parseInt(recurrence.split(":")[1], 10);
+    if (!isNaN(days) && days > 0) {
+      d.setDate(d.getDate() + days);
+    } else {
+      return null;
+    }
+  }
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
@@ -151,6 +159,37 @@ describe("computeNextDue", () => {
   test("result is always a valid YYYY-MM-DD string", () => {
     const result = computeNextDue("2026-03-14", "weekly");
     expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  test("days:3 advances by 3 days", () => {
+    expect(computeNextDue("2026-03-14", "days:3")).toBe("2026-03-17");
+  });
+
+  test("days:1 advances by 1 day", () => {
+    expect(computeNextDue("2026-03-14", "days:1")).toBe("2026-03-15");
+  });
+
+  test("days:7 advances by 7 days (same as weekly)", () => {
+    expect(computeNextDue("2026-03-14", "days:7")).toBe("2026-03-21");
+  });
+
+  test("days:30 advances by 30 days", () => {
+    expect(computeNextDue("2026-03-14", "days:30")).toBe("2026-04-13");
+  });
+
+  test("days:X handles year rollover correctly", () => {
+    expect(computeNextDue("2025-12-20", "days:20")).toBe("2026-01-09");
+  });
+
+  test("days:X returns null for invalid format", () => {
+    expect(computeNextDue("2026-03-14", "days:abc")).toBeNull();
+    expect(computeNextDue("2026-03-14", "days:0")).toBeNull();
+    expect(computeNextDue("2026-03-14", "days:-5")).toBeNull();
+  });
+
+  test("days:X uses today as base when dueDate is null", () => {
+    const expected = dateOffset(5);
+    expect(computeNextDue(null, "days:5")).toBe(expected);
   });
 });
 

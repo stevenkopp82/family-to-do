@@ -327,6 +327,7 @@ function computeNextDue(dueDate, recurrence) {
   // If no due date, base recurrence off today
   const base = dueDate || todayStr();
   const d = new Date(base + "T12:00:00");
+
   if (recurrence === "daily") d.setDate(d.getDate() + 1);
   else if (recurrence === "weekly") d.setDate(d.getDate() + 7);
   else if (recurrence === "biweekly") d.setDate(d.getDate() + 14);
@@ -337,6 +338,14 @@ function computeNextDue(dueDate, recurrence) {
     // Cap to last valid day of the target month
     const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
     d.setDate(Math.min(originalDay, daysInMonth));
+  }
+  else if (recurrence.startsWith("days:")) {
+    const days = parseInt(recurrence.split(":")[1], 10);
+    if (!isNaN(days) && days > 0) {
+      d.setDate(d.getDate() + days);
+    } else {
+      return null; // Invalid format
+    }
   }
   // Use local date string to avoid UTC timezone shifting
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -488,6 +497,10 @@ function taskCard(task, isOverdue, isCompleted) {
 }
 
 function recurringLabel(r) {
+  if (r.startsWith("days:")) {
+    const days = parseInt(r.split(":")[1], 10);
+    return `Every ${days} day${days === 1 ? "" : "s"}`;
+  }
   return { daily: "Daily", weekly: "Weekly", biweekly: "Every 2 wks", monthly: "Monthly" }[r] || r;
 }
 
@@ -536,7 +549,9 @@ window.openTaskModal = function () {
   document.getElementById("task-title").value = "";
   document.getElementById("task-due").value = "";
   document.getElementById("task-recurrence").value = "none";
+  document.getElementById("task-recurrence-days").value = "";
   clearTaskError();
+  toggleRecurrenceDaysInput();
   // Pre-select the currently filtered member (if any)
   const preselect = (activeFilter !== "all" && activeFilter !== "unassigned") ? [activeFilter] : [];
   renderMemberCheckboxes(preselect);
@@ -550,8 +565,19 @@ window.openEditTask = function (taskId) {
   document.getElementById("task-modal-title").textContent = "Edit Task";
   document.getElementById("task-title").value = task.title;
   document.getElementById("task-due").value = task.dueDate || "";
-  document.getElementById("task-recurrence").value = task.recurrence || "none";
+
+  // Handle custom days recurrence
+  if (task.recurrence && task.recurrence.startsWith("days:")) {
+    const days = parseInt(task.recurrence.split(":")[1], 10);
+    document.getElementById("task-recurrence").value = "days";
+    document.getElementById("task-recurrence-days").value = days;
+  } else {
+    document.getElementById("task-recurrence").value = task.recurrence || "none";
+    document.getElementById("task-recurrence-days").value = "";
+  }
+
   clearTaskError();
+  toggleRecurrenceDaysInput();
   renderMemberCheckboxes(task.members || []);
   document.getElementById("task-modal").classList.remove("hidden");
 };
@@ -561,16 +587,39 @@ window.closeTaskModal = function (e) {
   document.getElementById("task-modal").classList.add("hidden");
 };
 
+window.toggleRecurrenceDaysInput = function () {
+  const recurrence = document.getElementById("task-recurrence").value;
+  const daysInput = document.getElementById("task-recurrence-days");
+  if (recurrence === "days") {
+    daysInput.style.display = "block";
+    daysInput.focus();
+  } else {
+    daysInput.style.display = "none";
+  }
+};
+
 window.saveTask = async function () {
   const title = document.getElementById("task-title").value.trim();
   if (!title) return showTaskError("Please enter a task title.");
 
   const dueDate = document.getElementById("task-due").value || null;
-  const recurrence = document.getElementById("task-recurrence").value;
+  let recurrence = document.getElementById("task-recurrence").value;
+
+  // Handle custom days recurrence
+  if (recurrence === "days") {
+    const days = document.getElementById("task-recurrence-days").value.trim();
+    if (!days) return showTaskError("Please enter the number of days for custom recurrence.");
+    const daysNum = parseInt(days, 10);
+    if (isNaN(daysNum) || daysNum < 1 || daysNum > 30) {
+      return showTaskError("Number of days must be between 1 and 30.");
+    }
+    recurrence = `days:${daysNum}`;
+  }
 
   if (recurrence !== "none" && !dueDate) {
     return showTaskError("A due date is required for recurring tasks.");
   }
+
   const selectedMembers = Array.from(
     document.querySelectorAll(".member-checkbox-item.selected")
   ).map((el) => el.dataset.memberId);
