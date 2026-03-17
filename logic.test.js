@@ -24,7 +24,13 @@ function computeNextDue(dueDate, recurrence) {
   if (recurrence === "daily")    d.setDate(d.getDate() + 1);
   else if (recurrence === "weekly")   d.setDate(d.getDate() + 7);
   else if (recurrence === "biweekly") d.setDate(d.getDate() + 14);
-  else if (recurrence === "monthly")  d.setMonth(d.getMonth() + 1);
+  else if (recurrence === "monthly") {
+    const originalDay = d.getDate();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + 1);
+    const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    d.setDate(Math.min(originalDay, daysInMonth));
+  }
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
