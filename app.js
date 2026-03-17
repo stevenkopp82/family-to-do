@@ -386,8 +386,12 @@ function renderTasks() {
     .filter((t) => t.dueDate && t.dueDate < today)
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 
-  const upcoming = incomplete
-    .filter((t) => t.dueDate && t.dueDate >= today)
+  const dueToday = incomplete
+    .filter((t) => t.dueDate && t.dueDate === today)
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+
+  const later = incomplete
+    .filter((t) => t.dueDate && t.dueDate > today)
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 
   const noDue = incomplete.filter((t) => !t.dueDate);
@@ -419,9 +423,18 @@ function renderTasks() {
     overdue.forEach((t) => (html += taskCard(t, true, false)));
   }
 
-  if (upcoming.length) {
-    html += `<div class="section-label">📅 Upcoming</div>`;
-    upcoming.forEach((t) => (html += taskCard(t, false, false)));
+  if (dueToday.length) {
+    html += `<div class="section-label">📅 Today</div>`;
+    dueToday.forEach((t) => (html += taskCard(t, false, false)));
+  }
+
+  if (later.length) {
+    html += `<div class="section-label section-label-collapsible" onclick="toggleLaterSection(this)">
+      <span>🗓 Later</span><span class="collapse-arrow collapsed">▶</span>
+    </div>
+    <div class="later-section" style="display:none">`;
+    later.forEach((t) => (html += taskCard(t, false, false)));
+    html += `</div>`;
   }
 
   if (noDue.length) {
@@ -525,6 +538,14 @@ function renderMemberChips() {
   row.innerHTML = html;
 }
 
+window.toggleLaterSection = function (header) {
+  const section = header.nextElementSibling;
+  const arrow = header.querySelector(".collapse-arrow");
+  const isCollapsed = section.style.display === "none";
+  section.style.display = isCollapsed ? "" : "none";
+  arrow.classList.toggle("collapsed", !isCollapsed);
+};
+
 window.setFilter = function (memberId) {
   activeFilter = memberId;
   renderMemberChips();
@@ -547,7 +568,7 @@ window.openTaskModal = function () {
   editingTaskId = null;
   document.getElementById("task-modal-title").textContent = "Add Task";
   document.getElementById("task-title").value = "";
-  document.getElementById("task-due").value = "";
+  document.getElementById("task-due").value = todayStr();
   document.getElementById("task-recurrence").value = "none";
   document.getElementById("task-recurrence-days").value = "";
   clearTaskError();
