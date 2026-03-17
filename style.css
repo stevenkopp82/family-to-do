@@ -448,6 +448,10 @@ select.input { cursor: pointer; }
 .add-member-row { display: flex; gap: 8px; align-items: center; }
 .add-member-row .input { margin-bottom: 0; flex: 1; }
 
+.invite-link-row { display: flex; gap: 8px; align-items: center; }
+.invite-link-row .input { margin-bottom: 0; }
+.invite-section { border-top: 1px solid var(--border); padding-top: 16px; margin-top: 8px; }
+
 .color-input {
   width: 42px;
   height: 40px;

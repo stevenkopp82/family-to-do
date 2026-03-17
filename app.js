@@ -50,6 +50,10 @@ let tasks = [];
 let activeFilter = "all";
 let editingTaskId = null;
 let tasksUnsubscribe = null;
+let currentUserMemberId = null;  // member doc ID linked to this login
+let familyInviteCode = null;     // cached invite code for the family
+let migrationChecked = false;    // run user-member link migration at most once
+let pendingJoinFamily = null;    // { id, name } stored during join flow
 
 // ============================================================
 // AUTH
@@ -71,6 +75,7 @@ onAuthStateChanged(auth, async (user) => {
     if (userDoc && userDoc.exists()) {
       // Returning user — load their family
       familyId = userDoc.data().familyId;
+      currentUserMemberId = userDoc.data().memberId || null;
       localStorage.setItem("familyId_" + user.uid, familyId);
       console.log("[Auth] familyId from users doc:", familyId);
       try {
@@ -78,6 +83,7 @@ onAuthStateChanged(auth, async (user) => {
         if (familyDoc.exists()) {
           document.getElementById("header-family-name").textContent =
             familyDoc.data().name;
+          familyInviteCode = familyDoc.data().inviteCode || null;
           console.log("[Auth] Family loaded:", familyDoc.data().name);
         } else {
           console.warn("[Auth] Family doc not found for id:", familyId);
@@ -97,6 +103,10 @@ onAuthStateChanged(auth, async (user) => {
     familyId = null;
     members = [];
     tasks = [];
+    currentUserMemberId = null;
+    familyInviteCode = null;
+    migrationChecked = false;
+    pendingJoinFamily = null;
     if (tasksUnsubscribe) tasksUnsubscribe();
     showAuth();
   }
@@ -150,6 +160,14 @@ async function showFamilySetup() {
     }
   }
 
+  // Check for invite link
+  const inviteCode = new URLSearchParams(window.location.search).get("invite");
+  if (inviteCode) {
+    console.log("[Setup] Invite code detected:", inviteCode);
+    showJoinFamily(inviteCode);
+    return;
+  }
+
   // Truly new user — show the setup form
   console.log("[Setup] Showing family setup form");
   if (currentUser?.displayName) {
@@ -157,6 +175,75 @@ async function showFamilySetup() {
   }
   document.getElementById("family-setup-screen").classList.remove("hidden");
 }
+
+async function showJoinFamily(code) {
+  document.getElementById("auth-screen").classList.add("hidden");
+  document.getElementById("app-screen").classList.add("hidden");
+  document.getElementById("family-setup-screen").classList.remove("hidden");
+
+  // Show join state, hide create state
+  document.getElementById("setup-create-state").classList.add("hidden");
+  document.getElementById("setup-join-state").classList.remove("hidden");
+  document.getElementById("setup-error").classList.add("hidden");
+
+  if (currentUser?.displayName) {
+    document.getElementById("join-member-name").value = currentUser.displayName.split(" ")[0];
+  }
+
+  try {
+    const snap = await getDocs(query(collection(db, "families"), where("inviteCode", "==", code)));
+    if (snap.empty) {
+      showSetupError("This invite link is invalid or has been regenerated.");
+      document.getElementById("setup-join-state").classList.add("hidden");
+      return;
+    }
+    const fam = snap.docs[0];
+    pendingJoinFamily = { id: fam.id, name: fam.data().name };
+    document.getElementById("join-family-display-name").textContent = fam.data().name;
+  } catch (e) {
+    console.error("[Join] Failed to look up invite code:", e.code, e.message);
+    showSetupError("Failed to look up invite link. Please try again.");
+    document.getElementById("setup-join-state").classList.add("hidden");
+  }
+}
+
+window.joinFamily = async function () {
+  const name = document.getElementById("join-member-name").value.trim();
+  clearSetupError();
+  if (!name) return showSetupError("Please enter your name.");
+  if (!pendingJoinFamily) return showSetupError("Something went wrong. Please try the link again.");
+
+  const { id: fid, name: familyName } = pendingJoinFamily;
+  const uid = currentUser.uid;
+
+  try {
+    const memberRef = await addDoc(collection(db, "families", fid, "members"), {
+      name,
+      color: randomColor(),
+      userId: uid,
+      createdAt: serverTimestamp(),
+    });
+
+    await setDoc(doc(db, "users", uid), {
+      name,
+      email: currentUser.email || "",
+      familyId: fid,
+      memberId: memberRef.id,
+      createdAt: serverTimestamp(),
+    });
+
+    familyId = fid;
+    currentUserMemberId = memberRef.id;
+    localStorage.setItem("familyId_" + uid, fid);
+    document.getElementById("header-family-name").textContent = familyName;
+    history.replaceState({}, "", window.location.pathname);
+    showApp();
+    subscribeToData();
+  } catch (e) {
+    showSetupError("Failed to join family. Please try again.");
+    console.error("[Join] Error:", e.code, e.message);
+  }
+};
 
 window.signInWithGoogle = async function () {
   clearAuthError();
@@ -181,30 +268,37 @@ window.createFamily = async function () {
   try {
     const uid = currentUser.uid;
 
+    const inviteCode = generateInviteCode();
+
     // Create family document
     const familyRef = doc(collection(db, "families"));
     await setDoc(familyRef, {
       name: familyName,
       ownerId: uid,
-      createdAt: serverTimestamp(),
-    });
-
-    // Create user document pointing to family
-    await setDoc(doc(db, "users", uid), {
-      name: memberName,
-      email: currentUser.email,
-      familyId: familyRef.id,
+      inviteCode,
       createdAt: serverTimestamp(),
     });
 
     // Add the registering user as the first family member
-    await addDoc(collection(db, "families", familyRef.id, "members"), {
+    const memberRef = await addDoc(collection(db, "families", familyRef.id, "members"), {
       name: memberName,
       color: randomColor(),
+      userId: uid,
+      createdAt: serverTimestamp(),
+    });
+
+    // Create user document pointing to family and member
+    await setDoc(doc(db, "users", uid), {
+      name: memberName,
+      email: currentUser.email,
+      familyId: familyRef.id,
+      memberId: memberRef.id,
       createdAt: serverTimestamp(),
     });
 
     familyId = familyRef.id;
+    familyInviteCode = inviteCode;
+    currentUserMemberId = memberRef.id;
     localStorage.setItem("familyId_" + currentUser.uid, familyRef.id);
     document.getElementById("header-family-name").textContent = familyName;
     showApp();
@@ -252,6 +346,10 @@ function subscribeToData() {
       renderMemberChips();
       renderMemberCheckboxes();
       renderMembersList();
+      if (!migrationChecked) {
+        migrationChecked = true;
+        maybeMigrateUserMemberLink();
+      }
     },
     (err) => console.error("[Sub] Members permission error:", err.code, err.message)
   );
@@ -267,6 +365,17 @@ function subscribeToData() {
     },
     (err) => console.error("[Sub] Tasks permission error:", err.code, err.message)
   );
+}
+
+async function maybeMigrateUserMemberLink() {
+  if (!currentUser || !familyId || currentUserMemberId) return;
+  const unlinked = members.filter((m) => !m.userId);
+  if (unlinked.length !== 1) return; // ambiguous or none — skip
+  const member = unlinked[0];
+  console.log("[Migration] Linking user to member:", member.id);
+  await updateDoc(doc(db, "users", currentUser.uid), { memberId: member.id });
+  await updateDoc(doc(db, "families", familyId, "members", member.id), { userId: currentUser.uid });
+  currentUserMemberId = member.id;
 }
 
 // ============================================================
@@ -747,9 +856,51 @@ window.deleteTask = async function (taskId) {
 // MEMBERS MODAL
 // ============================================================
 
-window.openMembersModal = function () {
+window.openMembersModal = async function () {
   renderMembersList();
   document.getElementById("members-modal").classList.remove("hidden");
+
+  // Ensure family has an invite code (generate one if missing — e.g. existing families)
+  if (!familyInviteCode) {
+    familyInviteCode = generateInviteCode();
+    try {
+      await updateDoc(doc(db, "families", familyId), { inviteCode: familyInviteCode });
+    } catch (e) {
+      console.error("[Invite] Failed to save invite code:", e.code, e.message);
+      familyInviteCode = null;
+    }
+  }
+
+  const link = familyInviteCode
+    ? `${window.location.origin}${window.location.pathname}?invite=${familyInviteCode}`
+    : "";
+  document.getElementById("invite-link-input").value = link;
+};
+
+window.copyInviteLink = async function () {
+  const link = document.getElementById("invite-link-input").value;
+  if (!link) return;
+  try {
+    await navigator.clipboard.writeText(link);
+    const btn = document.getElementById("copy-invite-btn");
+    btn.textContent = "Copied!";
+    setTimeout(() => { btn.textContent = "Copy"; }, 2000);
+  } catch (e) {
+    console.error("[Invite] Clipboard write failed:", e);
+  }
+};
+
+window.regenerateInviteCode = async function () {
+  if (!confirm("Regenerate the invite link? The old link will stop working.")) return;
+  const newCode = generateInviteCode();
+  try {
+    await updateDoc(doc(db, "families", familyId), { inviteCode: newCode });
+    familyInviteCode = newCode;
+    const link = `${window.location.origin}${window.location.pathname}?invite=${newCode}`;
+    document.getElementById("invite-link-input").value = link;
+  } catch (e) {
+    console.error("[Invite] Failed to regenerate invite code:", e.code, e.message);
+  }
 };
 
 window.closeMembersModal = function (e) {
@@ -864,6 +1015,10 @@ window.deleteMember = async function (memberId) {
 // ============================================================
 // UTILS
 // ============================================================
+
+function generateInviteCode() {
+  return Math.random().toString(36).slice(2, 8).toUpperCase();
+}
 
 function randomColor() {
   const colors = [

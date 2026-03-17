@@ -50,18 +50,33 @@
           <path d="M33 30l2 2 4-4" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </div>
-      <h1 class="auth-title">Welcome!<br/><em>Set up your family</em></h1>
-      <p class="auth-sub">Just a couple of quick details to get started.</p>
 
       <div id="setup-error" class="auth-error hidden"></div>
 
-      <label class="field-label">Your name</label>
-      <input type="text" id="setup-member-name" class="input" placeholder="e.g. Mom, Dad, your first name" />
+      <!-- CREATE STATE (default) -->
+      <div id="setup-create-state">
+        <h1 class="auth-title">Welcome!<br/><em>Set up your family</em></h1>
+        <p class="auth-sub">Just a couple of quick details to get started.</p>
 
-      <label class="field-label">Family name</label>
-      <input type="text" id="setup-family-name" class="input" placeholder="e.g. The Smiths" />
+        <label class="field-label">Your name</label>
+        <input type="text" id="setup-member-name" class="input" placeholder="e.g. Mom, Dad, your first name" />
 
-      <button class="btn btn-primary full-width" onclick="createFamily()">Create My Family →</button>
+        <label class="field-label">Family name</label>
+        <input type="text" id="setup-family-name" class="input" placeholder="e.g. The Smiths" />
+
+        <button class="btn btn-primary full-width" onclick="createFamily()">Create My Family →</button>
+      </div>
+
+      <!-- JOIN STATE (shown when ?invite= param present) -->
+      <div id="setup-join-state" class="hidden">
+        <h1 class="auth-title">You're invited!<br/><em id="join-family-display-name"></em></h1>
+        <p class="auth-sub">Enter your name to join the family.</p>
+
+        <label class="field-label">Your name</label>
+        <input type="text" id="join-member-name" class="input" placeholder="e.g. Mom, Dad, your first name" />
+
+        <button class="btn btn-primary full-width" onclick="joinFamily()">Join Family →</button>
+      </div>
     </div>
   </div>
 
@@ -171,6 +186,16 @@
           <input type="hidden" id="selected-member-color" value="#4f86f7" />
         </div>
         <div id="members-modal-error" class="auth-error hidden"></div>
+
+        <div class="invite-section">
+          <p class="field-label" style="margin-top:20px;margin-bottom:4px">Invite Link</p>
+          <p class="help-text" style="margin-bottom:8px">Share this link so others can join with their own Google account.</p>
+          <div class="invite-link-row">
+            <input type="text" id="invite-link-input" class="input" readonly style="font-size:12px;flex:1" />
+            <button id="copy-invite-btn" class="btn btn-outline btn-sm" onclick="copyInviteLink()">Copy</button>
+          </div>
+          <button class="btn btn-ghost btn-sm" style="margin-top:6px;font-size:12px" onclick="regenerateInviteCode()">↺ Regenerate link</button>
+        </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-primary full-width" onclick="closeMembersModal()">Done</button>
