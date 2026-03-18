@@ -206,8 +206,9 @@ select.input { cursor: pointer; }
 .section-label:first-child { margin-top: 0; }
 .section-label-collapsible { cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none; }
 .section-label-collapsible:hover { color: var(--text2); }
-.collapse-arrow { font-size: 10px; transition: transform 0.2s; }
-.collapse-arrow:not(.collapsed) { transform: rotate(90deg); }
+.collapse-arrow { font-size: 10px; transition: transform 0.2s; transform: rotate(90deg); }
+.collapse-arrow.collapsed { transform: rotate(0deg); }
+.all-done-today { font-size: 14px; color: var(--text3); padding: 12px 0 4px; }
 
 .task-card {
   background: var(--surface);

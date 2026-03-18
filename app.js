@@ -540,23 +540,32 @@ function renderTasks() {
     overdue.forEach((t) => (html += taskCard(t, true, false)));
   }
 
+  const completedDueToday = completedToday.filter((t) => t.dueDate === today);
+
   if (dueToday.length) {
     html += `<div class="section-label">📅 Today</div>`;
     dueToday.forEach((t) => (html += taskCard(t, false, false)));
+  } else if (completedDueToday.length) {
+    html += `<div class="section-label">📅 Today</div>
+    <div class="all-done-today">All done for today! 🎉</div>`;
   }
 
   if (later.length) {
-    html += `<div class="section-label section-label-collapsible" onclick="toggleLaterSection(this)">
-      <span>🗓 Later</span><span class="collapse-arrow collapsed">▶</span>
+    html += `<div class="section-label section-label-collapsible" onclick="toggleSection(this)">
+      <span>🗓 Later</span><span class="collapse-arrow">▶</span>
     </div>
-    <div class="later-section" style="display:none">`;
+    <div class="collapsible-section">`;
     later.forEach((t) => (html += taskCard(t, false, false)));
     html += `</div>`;
   }
 
   if (noDue.length) {
-    html += `<div class="section-label">🗂 No Due Date</div>`;
+    html += `<div class="section-label section-label-collapsible" onclick="toggleSection(this)">
+      <span>🗂 No Due Date</span><span class="collapse-arrow collapsed">▶</span>
+    </div>
+    <div class="collapsible-section" style="display:none">`;
     noDue.forEach((t) => (html += taskCard(t, false, false)));
+    html += `</div>`;
   }
 
   if (completedToday.length) {
@@ -655,7 +664,7 @@ function renderMemberChips() {
   row.innerHTML = html;
 }
 
-window.toggleLaterSection = function (header) {
+window.toggleSection = function (header) {
   const section = header.nextElementSibling;
   const arrow = header.querySelector(".collapse-arrow");
   const isCollapsed = section.style.display === "none";
