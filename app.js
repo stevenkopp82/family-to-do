@@ -372,14 +372,22 @@ function subscribeToData() {
 }
 
 async function maybeMigrateUserMemberLink() {
-  if (!currentUser || !familyId || currentUserMemberId) return;
+  if (!currentUser || !familyId || currentUserMemberId) {
+    console.log("[Migration] Skipping — currentUser:", !!currentUser, "familyId:", !!familyId, "currentUserMemberId:", currentUserMemberId);
+    return;
+  }
   const unlinked = members.filter((m) => !m.userId);
-  if (unlinked.length !== 1) return; // ambiguous or none — skip
+  console.log("[Migration] Unlinked members found:", unlinked.length, unlinked.map(m => m.id));
+  if (unlinked.length !== 1) return;
   const member = unlinked[0];
-  console.log("[Migration] Linking user to member:", member.id);
-  await updateDoc(doc(db, "users", currentUser.uid), { memberId: member.id });
-  await updateDoc(doc(db, "families", familyId, "members", member.id), { userId: currentUser.uid });
-  currentUserMemberId = member.id;
+  try {
+    await updateDoc(doc(db, "users", currentUser.uid), { memberId: member.id });
+    await updateDoc(doc(db, "families", familyId, "members", member.id), { userId: currentUser.uid });
+    currentUserMemberId = member.id;
+    console.log("[Migration] Successfully linked user to member:", member.id);
+  } catch (e) {
+    console.error("[Migration] Failed:", e);
+  }
 }
 
 // ============================================================
