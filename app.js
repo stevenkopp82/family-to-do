@@ -217,6 +217,15 @@ window.joinFamily = async function () {
   const uid = currentUser.uid;
 
   try {
+    // Write user doc first — this establishes familyId so Firestore rules
+    // allow the subsequent write to the members subcollection.
+    await setDoc(doc(db, "users", uid), {
+      name,
+      email: currentUser.email || "",
+      familyId: fid,
+      createdAt: serverTimestamp(),
+    });
+
     const memberRef = await addDoc(collection(db, "families", fid, "members"), {
       name,
       color: randomColor(),
@@ -224,13 +233,8 @@ window.joinFamily = async function () {
       createdAt: serverTimestamp(),
     });
 
-    await setDoc(doc(db, "users", uid), {
-      name,
-      email: currentUser.email || "",
-      familyId: fid,
-      memberId: memberRef.id,
-      createdAt: serverTimestamp(),
-    });
+    // Update user doc with the member ID now that we have it
+    await updateDoc(doc(db, "users", uid), { memberId: memberRef.id });
 
     familyId = fid;
     currentUserMemberId = memberRef.id;
@@ -241,7 +245,7 @@ window.joinFamily = async function () {
     subscribeToData();
   } catch (e) {
     showSetupError("Failed to join family. Please try again.");
-    console.error("[Join] Error:", e.code, e.message);
+    console.error("[Join] Error:", e);
   }
 };
 
