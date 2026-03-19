@@ -596,7 +596,7 @@ function renderTasks() {
     html += `<div class="section-label section-label-collapsible" onclick="toggleSection(this)">
       <span>🗂 No Due Date</span><span class="collapse-arrow collapsed">▶</span>
     </div>
-    <div class="collapsible-section" style="display:none">`;
+    <div class="collapsible-section">`;
     noDue.forEach((t) => (html += taskCard(t, false, false)));
     html += `</div>`;
   }
