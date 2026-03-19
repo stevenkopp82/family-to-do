@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); clients=d.get\\(''''client'''',[]\\); [print\\(''''oauth_clients:'''', c.get\\(''''oauth_client'''',[]\\)\\) for c in clients]\")"
+    ]
+  }
+}

@@ -7,6 +7,7 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithCredential,
   signOut,
   onAuthStateChanged,
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -252,9 +253,24 @@ window.joinFamily = async function () {
 window.signInWithGoogle = async function () {
   clearAuthError();
   try {
-    await signInWithPopup(auth, googleProvider);
+    const isCapacitor = !!(window.Capacitor && window.Capacitor.isNativePlatform());
+
+    if (isCapacitor) {
+      // Native Android: use Capacitor Firebase Auth plugin
+      const { FirebaseAuthentication } = window.Capacitor.Plugins;
+      const result = await FirebaseAuthentication.signInWithGoogle();
+      const credential = GoogleAuthProvider.credential(
+        result.credential.idToken,
+        result.credential.accessToken ?? null
+      );
+      await signInWithCredential(auth, credential);
+    } else {
+      // Web: existing popup flow unchanged
+      await signInWithPopup(auth, googleProvider);
+    }
   } catch (e) {
-    if (e.code !== "auth/popup-closed-by-user" && e.code !== "auth/cancelled-popup-request") {
+    const cancelCodes = ["auth/popup-closed-by-user", "auth/cancelled-popup-request"];
+    if (!cancelCodes.includes(e.code)) {
       showAuthError("Sign-in failed. Please try again.");
     }
   }
@@ -888,9 +904,8 @@ window.openMembersModal = async function () {
     }
   }
 
-  const link = familyInviteCode
-    ? `${window.location.origin}${window.location.pathname}?invite=${familyInviteCode}`
-    : "";
+  const BASE_URL = "https://stevenkopp82.github.io/family-to-do/";
+  const link = familyInviteCode ? `${BASE_URL}?invite=${familyInviteCode}` : "";
   document.getElementById("invite-link-input").value = link;
 };
 
@@ -913,7 +928,7 @@ window.regenerateInviteCode = async function () {
   try {
     await updateDoc(doc(db, "families", familyId), { inviteCode: newCode });
     familyInviteCode = newCode;
-    const link = `${window.location.origin}${window.location.pathname}?invite=${newCode}`;
+    const link = `https://stevenkopp82.github.io/family-to-do/?invite=${newCode}`;
     document.getElementById("invite-link-input").value = link;
   } catch (e) {
     console.error("[Invite] Failed to regenerate invite code:", e.code, e.message);

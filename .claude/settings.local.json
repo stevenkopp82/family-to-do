@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\"/c/Program Files/nodejs/npm\" install @capacitor/core @capacitor/android @capacitor-firebase/authentication)",
+      "Bash(\"/c/Program Files/nodejs/npm\" install --save-dev @capacitor/cli)"
+    ]
+  }
+}
