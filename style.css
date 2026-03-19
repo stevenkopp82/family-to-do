@@ -524,6 +524,30 @@ select.input { cursor: pointer; }
   color: var(--text2);
 }
 
+/* ===== UPCOMING RECURRING TASKS ===== */
+.task-card-upcoming-recurring {
+  opacity: 0.72;
+  background: var(--surface2) !important;
+  border-color: var(--border) !important;
+  border-style: dashed !important;
+}
+.task-title-upcoming { color: var(--text2); }
+.task-check-upcoming {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 2px solid var(--border);
+  background: var(--surface2);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  font-size: 11px;
+  color: var(--text3);
+}
+.task-check-upcoming::after { content: '↻'; }
+
 /* ===== MEMBER INLINE EDIT ===== */
 .member-row-editing {
   flex-direction: column;

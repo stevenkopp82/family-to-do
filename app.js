@@ -541,7 +541,19 @@ function renderTasks() {
     completedToday = completedToday.filter((t) => t.members && t.members.includes(activeFilter));
   }
 
-  if (incomplete.length === 0 && completedToday.length === 0) {
+  // Completed recurring tasks waiting for their next occurrence
+  let upcomingRecurring = tasks.filter((t) => {
+    if (!t.completed) return false;
+    if (!t.recurrence || t.recurrence === "none") return false;
+    return t.nextDue && t.nextDue > today;
+  });
+  if (activeFilter === "unassigned") {
+    upcomingRecurring = upcomingRecurring.filter((t) => !t.members || t.members.length === 0);
+  } else if (activeFilter !== "all") {
+    upcomingRecurring = upcomingRecurring.filter((t) => t.members && t.members.includes(activeFilter));
+  }
+
+  if (incomplete.length === 0 && completedToday.length === 0 && upcomingRecurring.length === 0) {
     container.innerHTML = `<div class="empty-state">
       <div class="empty-icon">✅</div>
       <p>${activeFilter === "all" ? "No tasks yet! Add one above." : "No tasks for this filter."}</p>
@@ -566,12 +578,17 @@ function renderTasks() {
     <div class="all-done-today">All done for today! 🎉</div>`;
   }
 
-  if (later.length) {
+  const laterCombined = [
+    ...later.map((t) => ({ task: t, sortDate: t.dueDate, upcoming: false })),
+    ...upcomingRecurring.map((t) => ({ task: t, sortDate: t.nextDue, upcoming: true })),
+  ].sort((a, b) => a.sortDate.localeCompare(b.sortDate));
+
+  if (laterCombined.length) {
     html += `<div class="section-label section-label-collapsible" onclick="toggleSection(this)">
       <span>🗓 Later</span><span class="collapse-arrow">▶</span>
     </div>
     <div class="collapsible-section">`;
-    later.forEach((t) => (html += taskCard(t, false, false)));
+    laterCombined.forEach(({ task, upcoming }) => (html += taskCard(task, false, false, upcoming)));
     html += `</div>`;
   }
 
@@ -592,7 +609,7 @@ function renderTasks() {
   container.innerHTML = html;
 }
 
-function taskCard(task, isOverdue, isCompleted) {
+function taskCard(task, isOverdue, isCompleted, isUpcomingRecurring = false) {
   const memberAvatars = (task.members || [])
     .map((mid) => {
       const m = members.find((x) => x.id === mid);
@@ -617,6 +634,24 @@ function taskCard(task, isOverdue, isCompleted) {
   const deleteTitle = task.recurrence && task.recurrence !== "none"
     ? "Delete (stop recurring)"
     : "Delete task";
+
+  if (isUpcomingRecurring) {
+    const nextDueStr = task.nextDue ? formatDate(task.nextDue) : "";
+    return `<div class="task-card task-card-upcoming-recurring">
+      <div class="task-check task-check-upcoming" title="Completed — next occurrence upcoming"></div>
+      <div class="task-main">
+        <div class="task-title task-title-upcoming">${escHtml(task.title)}</div>
+        <div class="task-meta">
+          ${nextDueStr ? `<span class="task-date">📅 ${nextDueStr}</span>` : ""}
+          ${recurLabel}
+          <div class="member-avatars">${memberAvatars}</div>
+        </div>
+      </div>
+      <div class="task-actions">
+        <button class="task-action-btn delete" onclick="deleteTask('${task.id}')" title="${deleteTitle}">🗑</button>
+      </div>
+    </div>`;
+  }
 
   if (isCompleted) {
     return `<div class="task-card task-card-completed">
