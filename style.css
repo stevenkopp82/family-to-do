@@ -524,6 +524,20 @@ select.input { cursor: pointer; }
   color: var(--text2);
 }
 
+/* ===== SPARK BURST ANIMATION ===== */
+.spark {
+  position: fixed;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  animation: spark-fly 0.55s ease-out forwards;
+  z-index: 9999;
+}
+@keyframes spark-fly {
+  0%   { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0); opacity: 0; }
+}
+
 /* ===== UPCOMING RECURRING TASKS ===== */
 .task-card-upcoming-recurring {
   opacity: 0.72;

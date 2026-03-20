@@ -670,7 +670,7 @@ function taskCard(task, isOverdue, isCompleted, isUpcomingRecurring = false) {
   }
 
   return `<div class="task-card${isOverdue ? " overdue" : ""}">
-    <div class="task-check" onclick="toggleComplete('${task.id}')" title="Mark complete"></div>
+    <div class="task-check" onclick="toggleComplete('${task.id}', this)" title="Mark complete"></div>
     <div class="task-main">
       <div class="task-title">${escHtml(task.title)}</div>
       <div class="task-meta">
@@ -887,9 +887,11 @@ function clearTaskError() {
 // COMPLETE / DELETE TASKS
 // ============================================================
 
-window.toggleComplete = async function (taskId) {
+window.toggleComplete = async function (taskId, el) {
   const task = tasks.find((t) => t.id === taskId);
   if (!task) return;
+
+  triggerSparkBurst(el);
 
   const isRecurring = task.recurrence && task.recurrence !== "none";
 
@@ -908,6 +910,31 @@ window.toggleComplete = async function (taskId) {
     });
   }
 };
+
+function triggerSparkBurst(el) {
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const colors = ["#FFD700", "#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A", "#BB8FCE", "#F7DC6F", "#98D8C8"];
+  const count = 8;
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * 360 + (Math.random() * 20 - 10);
+    const distance = 35 + Math.random() * 20;
+    const size = 5 + Math.random() * 4;
+    const spark = document.createElement("div");
+    spark.className = "spark";
+    spark.style.cssText = `
+      left:${cx}px; top:${cy}px;
+      width:${size}px; height:${size}px;
+      background:${colors[i % colors.length]};
+      --dx:${Math.cos((angle * Math.PI) / 180) * distance}px;
+      --dy:${Math.sin((angle * Math.PI) / 180) * distance}px;
+    `;
+    document.body.appendChild(spark);
+    spark.addEventListener("animationend", () => spark.remove());
+  }
+}
 
 window.deleteTask = async function (taskId) {
   const task = tasks.find((t) => t.id === taskId);
