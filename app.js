@@ -920,7 +920,7 @@ function triggerSparkBurst(el) {
   const count = 8;
   for (let i = 0; i < count; i++) {
     const angle = (i / count) * 360 + (Math.random() * 20 - 10);
-    const distance = 35 + Math.random() * 20;
+    const distance = 55 + Math.random() * 35;
     const size = 5 + Math.random() * 4;
     const spark = document.createElement("div");
     spark.className = "spark";
