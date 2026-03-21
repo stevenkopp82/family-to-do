@@ -188,19 +188,27 @@ async function showJoinFamily(code) {
   document.getElementById("setup-error").classList.add("hidden");
 
   if (code.includes(":")) {
-    // New format: FAMILYID:MEMBERINVITECODE — links to a specific pending member.
-    // Only the family doc is read here (no members subcollection), so this works
-    // before the new user has been granted any Firestore permissions.
+    // New format: FAMILYID:MEMBERINVITECODE
+    // A brand-new user has no users doc yet, so Firestore rules block all family reads.
+    // Fix: write a temporary users doc with just familyId first — that grants read
+    // access. If the invite turns out to be invalid we delete it and show an error.
     const [fid, memberCode] = code.split(":");
+    const uid = currentUser.uid;
+    let wroteUsersDoc = false;
     try {
+      await setDoc(doc(db, "users", uid), { familyId: fid, createdAt: serverTimestamp() });
+      wroteUsersDoc = true;
+
       const famDoc = await getDoc(doc(db, "families", fid));
       if (!famDoc.exists()) {
+        await deleteDoc(doc(db, "users", uid));
         showSetupError("This invite link is invalid or has expired.");
         document.getElementById("setup-join-state").classList.add("hidden");
         return;
       }
       const entry = (famDoc.data().memberInvites || {})[memberCode];
       if (!entry || !entry.memberId) {
+        await deleteDoc(doc(db, "users", uid));
         showSetupError("This invite link is invalid or has been regenerated.");
         document.getElementById("setup-join-state").classList.add("hidden");
         return;
@@ -215,6 +223,7 @@ async function showJoinFamily(code) {
       document.getElementById("join-preset-name").textContent = entry.name;
     } catch (e) {
       console.error("[Join] Failed to look up invite:", e.code, e.message);
+      if (wroteUsersDoc) await deleteDoc(doc(db, "users", uid)).catch(() => {});
       showSetupError("Failed to look up invite link. Please try again.");
       document.getElementById("setup-join-state").classList.add("hidden");
     }
@@ -254,17 +263,12 @@ window.joinFamily = async function () {
 
   try {
     if (pendingMemberId) {
-      // New flow: link Google account to an existing pending member
-      const memberSnap = await getDoc(doc(db, "families", fid, "members", pendingMemberId));
-      if (!memberSnap.exists()) return showSetupError("Member not found. The link may be invalid.");
-      const memberName = memberSnap.data().name;
-
-      await setDoc(doc(db, "users", uid), {
+      // New flow: users doc was already written in showJoinFamily — just complete it
+      const memberName = document.getElementById("join-preset-name").textContent;
+      await updateDoc(doc(db, "users", uid), {
         name: memberName,
         email: currentUser.email || "",
-        familyId: fid,
         memberId: pendingMemberId,
-        createdAt: serverTimestamp(),
       });
       await updateDoc(doc(db, "families", fid, "members", pendingMemberId), {
         status: "active",
