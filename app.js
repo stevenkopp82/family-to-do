@@ -52,9 +52,9 @@ let activeFilter = "all";
 let editingTaskId = null;
 let tasksUnsubscribe = null;
 let currentUserMemberId = null;  // member doc ID linked to this login
-let familyInviteCode = null;     // cached invite code for the family
 let migrationChecked = false;    // run user-member link migration at most once
 let pendingJoinFamily = null;    // { id, name } stored during join flow
+let pendingMemberId = null;      // member doc ID to link on invite join (new flow)
 
 // ============================================================
 // AUTH
@@ -84,7 +84,6 @@ onAuthStateChanged(auth, async (user) => {
         if (familyDoc.exists()) {
           document.getElementById("header-family-name").textContent =
             familyDoc.data().name;
-          familyInviteCode = familyDoc.data().inviteCode || null;
           console.log("[Auth] Family loaded:", familyDoc.data().name);
         } else {
           console.warn("[Auth] Family doc not found for id:", familyId);
@@ -105,9 +104,9 @@ onAuthStateChanged(auth, async (user) => {
     members = [];
     tasks = [];
     currentUserMemberId = null;
-    familyInviteCode = null;
     migrationChecked = false;
     pendingJoinFamily = null;
+    pendingMemberId = null;
     if (tasksUnsubscribe) tasksUnsubscribe();
     showAuth();
   }
@@ -181,64 +180,116 @@ async function showJoinFamily(code) {
   document.getElementById("auth-screen").classList.add("hidden");
   document.getElementById("app-screen").classList.add("hidden");
   document.getElementById("family-setup-screen").classList.remove("hidden");
-
-  // Show join state, hide create state
   document.getElementById("setup-create-state").classList.add("hidden");
   document.getElementById("setup-join-state").classList.remove("hidden");
   document.getElementById("setup-error").classList.add("hidden");
 
-  if (currentUser?.displayName) {
-    document.getElementById("join-member-name").value = currentUser.displayName.split(" ")[0];
-  }
-
-  try {
-    const snap = await getDocs(query(collection(db, "families"), where("inviteCode", "==", code)));
-    if (snap.empty) {
-      showSetupError("This invite link is invalid or has been regenerated.");
+  if (code.includes(":")) {
+    // New format: FAMILYID:MEMBERINVITECODE — links to a specific pending member
+    const [fid, memberCode] = code.split(":");
+    try {
+      const famDoc = await getDoc(doc(db, "families", fid));
+      if (!famDoc.exists()) {
+        showSetupError("This invite link is invalid or has expired.");
+        document.getElementById("setup-join-state").classList.add("hidden");
+        return;
+      }
+      const membersSnap = await getDocs(collection(db, "families", fid, "members"));
+      const memberDoc = membersSnap.docs.find((d) => d.data().inviteCode === memberCode);
+      if (!memberDoc) {
+        showSetupError("This invite link is invalid or has been regenerated.");
+        document.getElementById("setup-join-state").classList.add("hidden");
+        return;
+      }
+      pendingJoinFamily = { id: fid, name: famDoc.data().name };
+      pendingMemberId = memberDoc.id;
+      document.getElementById("join-family-display-name").textContent = famDoc.data().name;
+      document.getElementById("join-sub-text").textContent = `You're joining as ${memberDoc.data().name}.`;
+      document.getElementById("join-name-input-row").classList.add("hidden");
+      document.getElementById("join-name-display-row").classList.remove("hidden");
+      document.getElementById("join-preset-name").textContent = memberDoc.data().name;
+    } catch (e) {
+      console.error("[Join] Failed to look up invite:", e.code, e.message);
+      showSetupError("Failed to look up invite link. Please try again.");
       document.getElementById("setup-join-state").classList.add("hidden");
-      return;
     }
-    const fam = snap.docs[0];
-    pendingJoinFamily = { id: fam.id, name: fam.data().name };
-    document.getElementById("join-family-display-name").textContent = fam.data().name;
-  } catch (e) {
-    console.error("[Join] Failed to look up invite code:", e.code, e.message);
-    showSetupError("Failed to look up invite link. Please try again.");
-    document.getElementById("setup-join-state").classList.add("hidden");
+  } else {
+    // Old format: family-level invite code (backward compat)
+    pendingMemberId = null;
+    if (currentUser?.displayName) {
+      document.getElementById("join-member-name").value = currentUser.displayName.split(" ")[0];
+    }
+    document.getElementById("join-sub-text").textContent = "Enter your name to join the family.";
+    document.getElementById("join-name-input-row").classList.remove("hidden");
+    document.getElementById("join-name-display-row").classList.add("hidden");
+    try {
+      const snap = await getDocs(query(collection(db, "families"), where("inviteCode", "==", code)));
+      if (snap.empty) {
+        showSetupError("This invite link is invalid or has been regenerated.");
+        document.getElementById("setup-join-state").classList.add("hidden");
+        return;
+      }
+      const fam = snap.docs[0];
+      pendingJoinFamily = { id: fam.id, name: fam.data().name };
+      document.getElementById("join-family-display-name").textContent = fam.data().name;
+    } catch (e) {
+      console.error("[Join] Failed to look up invite code:", e.code, e.message);
+      showSetupError("Failed to look up invite link. Please try again.");
+      document.getElementById("setup-join-state").classList.add("hidden");
+    }
   }
 }
 
 window.joinFamily = async function () {
-  const name = document.getElementById("join-member-name").value.trim();
   clearSetupError();
-  if (!name) return showSetupError("Please enter your name.");
   if (!pendingJoinFamily) return showSetupError("Something went wrong. Please try the link again.");
 
   const { id: fid, name: familyName } = pendingJoinFamily;
   const uid = currentUser.uid;
 
   try {
-    // Write user doc first — this establishes familyId so Firestore rules
-    // allow the subsequent write to the members subcollection.
-    await setDoc(doc(db, "users", uid), {
-      name,
-      email: currentUser.email || "",
-      familyId: fid,
-      createdAt: serverTimestamp(),
-    });
+    if (pendingMemberId) {
+      // New flow: link Google account to an existing pending member
+      const memberSnap = await getDoc(doc(db, "families", fid, "members", pendingMemberId));
+      if (!memberSnap.exists()) return showSetupError("Member not found. The link may be invalid.");
+      const memberName = memberSnap.data().name;
 
-    const memberRef = await addDoc(collection(db, "families", fid, "members"), {
-      name,
-      color: randomColor(),
-      userId: uid,
-      createdAt: serverTimestamp(),
-    });
+      await setDoc(doc(db, "users", uid), {
+        name: memberName,
+        email: currentUser.email || "",
+        familyId: fid,
+        memberId: pendingMemberId,
+        createdAt: serverTimestamp(),
+      });
+      await updateDoc(doc(db, "families", fid, "members", pendingMemberId), {
+        status: "active",
+        userId: uid,
+        inviteCode: null,
+      });
+      currentUserMemberId = pendingMemberId;
+    } else {
+      // Old flow: create a new member (backward compat with family-level invite links)
+      const name = document.getElementById("join-member-name").value.trim();
+      if (!name) return showSetupError("Please enter your name.");
 
-    // Update user doc with the member ID now that we have it
-    await updateDoc(doc(db, "users", uid), { memberId: memberRef.id });
+      await setDoc(doc(db, "users", uid), {
+        name,
+        email: currentUser.email || "",
+        familyId: fid,
+        createdAt: serverTimestamp(),
+      });
+      const memberRef = await addDoc(collection(db, "families", fid, "members"), {
+        name,
+        color: randomColor(),
+        userId: uid,
+        status: "active",
+        createdAt: serverTimestamp(),
+      });
+      await updateDoc(doc(db, "users", uid), { memberId: memberRef.id });
+      currentUserMemberId = memberRef.id;
+    }
 
     familyId = fid;
-    currentUserMemberId = memberRef.id;
     localStorage.setItem("familyId_" + uid, fid);
     document.getElementById("header-family-name").textContent = familyName;
     history.replaceState({}, "", window.location.pathname);
@@ -304,6 +355,7 @@ window.createFamily = async function () {
       name: memberName,
       color: randomColor(),
       userId: uid,
+      status: "active",
       createdAt: serverTimestamp(),
     });
 
@@ -317,7 +369,6 @@ window.createFamily = async function () {
     });
 
     familyId = familyRef.id;
-    familyInviteCode = inviteCode;
     currentUserMemberId = memberRef.id;
     localStorage.setItem("familyId_" + currentUser.uid, familyRef.id);
     document.getElementById("header-family-name").textContent = familyName;
@@ -955,24 +1006,13 @@ window.deleteTask = async function (taskId) {
 // MEMBERS MODAL
 // ============================================================
 
-window.openMembersModal = async function () {
+window.openMembersModal = function () {
   renderMembersList();
+  document.getElementById("new-member-name").value = "";
+  document.getElementById("new-invite-link-panel").classList.add("hidden");
+  document.getElementById("members-modal-error").classList.add("hidden");
+  window.selectMemberColor("#4f86f7");
   document.getElementById("members-modal").classList.remove("hidden");
-
-  // Ensure family has an invite code (generate one if missing — e.g. existing families)
-  if (!familyInviteCode) {
-    familyInviteCode = generateInviteCode();
-    try {
-      await updateDoc(doc(db, "families", familyId), { inviteCode: familyInviteCode });
-    } catch (e) {
-      console.error("[Invite] Failed to save invite code:", e.code, e.message);
-      familyInviteCode = null;
-    }
-  }
-
-  const BASE_URL = "https://stevenkopp82.github.io/family-to-do/";
-  const link = familyInviteCode ? `${BASE_URL}?invite=${familyInviteCode}` : "";
-  document.getElementById("invite-link-input").value = link;
 };
 
 window.copyInviteLink = async function () {
@@ -988,18 +1028,6 @@ window.copyInviteLink = async function () {
   }
 };
 
-window.regenerateInviteCode = async function () {
-  if (!confirm("Regenerate the invite link? The old link will stop working.")) return;
-  const newCode = generateInviteCode();
-  try {
-    await updateDoc(doc(db, "families", familyId), { inviteCode: newCode });
-    familyInviteCode = newCode;
-    const link = `https://stevenkopp82.github.io/family-to-do/?invite=${newCode}`;
-    document.getElementById("invite-link-input").value = link;
-  } catch (e) {
-    console.error("[Invite] Failed to regenerate invite code:", e.code, e.message);
-  }
-};
 
 window.closeMembersModal = function (e) {
   if (e && e.target !== document.getElementById("members-modal")) return;
@@ -1037,11 +1065,28 @@ window.renderMembersList = function(editingId = null) {
         </div>
       </div>`;
     }
-    // Normal row
+    // Normal row — status badge + action buttons
+    const status = m.status || "active";
+    const statusBadge = {
+      active:      `<span class="member-status member-status-active">Joined</span>`,
+      pending:     `<span class="member-status member-status-pending">Invite sent</span>`,
+      "name-only": `<span class="member-status member-status-name-only">No account</span>`,
+    }[status] || `<span class="member-status member-status-active">Joined</span>`;
+
+    const inviteBtn = status === "name-only"
+      ? `<button class="member-action-btn" data-invite-btn="${m.id}" onclick="sendMemberInvite('${m.id}')" title="Send invite link">✉</button>`
+      : status === "pending"
+      ? `<button class="member-action-btn" data-copy-btn="${m.id}" onclick="copyMemberInviteLink('${m.id}')" title="Copy invite link">🔗</button>`
+      : "";
+
     return `<div class="member-row">
       <div class="avatar" style="background:${m.color || "#888"}">${initials}</div>
-      <span class="member-name">${escHtml(m.name)}</span>
+      <div class="member-info">
+        <span class="member-name">${escHtml(m.name)}</span>
+        ${statusBadge}
+      </div>
       <div style="display:flex;gap:4px;margin-left:auto">
+        ${inviteBtn}
         <button class="member-action-btn" onclick="renderMembersList('${m.id}')" title="Edit member">✏️</button>
         <button class="member-action-btn" onclick="deleteMember('${m.id}')" title="Remove member">✕</button>
       </div>
@@ -1071,26 +1116,82 @@ window.saveMemberEdit = async function(memberId) {
   }
 };
 
-window.addMember = async function () {
+window.addMember = async function (withInvite = false) {
   const nameEl = document.getElementById("new-member-name");
   const colorEl = document.getElementById("selected-member-color");
   const name = nameEl.value.trim();
+  const errorEl = document.getElementById("members-modal-error");
+  errorEl.classList.add("hidden");
   if (!name) return;
+
+  const inviteCode = withInvite ? generateInviteCode() : null;
 
   try {
     await addDoc(collection(db, "families", familyId, "members"), {
       name,
       color: colorEl.value || randomColor(),
+      status: withInvite ? "pending" : "name-only",
+      ...(inviteCode ? { inviteCode } : {}),
       createdAt: serverTimestamp(),
     });
     nameEl.value = "";
-    // Reset swatch selection to first color
     window.selectMemberColor("#4f86f7");
+
+    if (withInvite) {
+      const link = memberInviteLink(familyId, inviteCode);
+      document.getElementById("new-invite-link-input").value = link;
+      document.getElementById("new-invite-link-panel").classList.remove("hidden");
+    } else {
+      document.getElementById("new-invite-link-panel").classList.add("hidden");
+    }
   } catch (e) {
     console.error("[Member] Failed to add member:", e.code, e.message);
-    const el = document.getElementById("members-modal-error");
-    el.textContent = `Failed to add member: ${e.message}`;
-    el.classList.remove("hidden");
+    errorEl.textContent = `Failed to add member: ${e.message}`;
+    errorEl.classList.remove("hidden");
+  }
+};
+
+function memberInviteLink(fid, code) {
+  return `https://stevenkopp82.github.io/family-to-do/?invite=${fid}:${code}`;
+}
+
+window.sendMemberInvite = async function (memberId) {
+  const inviteCode = generateInviteCode();
+  try {
+    await updateDoc(doc(db, "families", familyId, "members", memberId), {
+      status: "pending",
+      inviteCode,
+    });
+    const link = memberInviteLink(familyId, inviteCode);
+    await navigator.clipboard.writeText(link);
+    const btn = document.querySelector(`[data-invite-btn="${memberId}"]`);
+    if (btn) { btn.textContent = "Copied!"; setTimeout(() => { btn.textContent = "Send invite"; }, 2000); }
+  } catch (e) {
+    console.error("[Invite] Failed to generate invite:", e);
+  }
+};
+
+window.copyMemberInviteLink = async function (memberId) {
+  const member = members.find((m) => m.id === memberId);
+  if (!member || !member.inviteCode) return;
+  const link = memberInviteLink(familyId, member.inviteCode);
+  try {
+    await navigator.clipboard.writeText(link);
+    const btn = document.querySelector(`[data-copy-btn="${memberId}"]`);
+    if (btn) { btn.textContent = "Copied!"; setTimeout(() => { btn.textContent = "Copy link"; }, 2000); }
+  } catch (e) {
+    console.error("[Invite] Failed to copy link:", e);
+  }
+};
+
+window.copyNewInviteLink = async function () {
+  const val = document.getElementById("new-invite-link-input").value;
+  try {
+    await navigator.clipboard.writeText(val);
+    const btn = document.querySelector('[onclick="copyNewInviteLink()"]');
+    if (btn) { btn.textContent = "Copied!"; setTimeout(() => { btn.textContent = "Copy"; }, 2000); }
+  } catch (e) {
+    console.error("[Invite] Failed to copy new invite link:", e);
   }
 };
 

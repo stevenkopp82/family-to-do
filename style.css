@@ -464,9 +464,43 @@ select.input { cursor: pointer; }
 .add-member-row { display: flex; gap: 8px; align-items: center; }
 .add-member-row .input { margin-bottom: 0; flex: 1; }
 
+.add-member-section { border-top: 1px solid var(--border); padding-top: 16px; margin-top: 8px; }
+
+.add-member-actions { display: flex; gap: 8px; }
+.add-member-actions .btn { flex: 1; }
+
+.invite-link-panel {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
 .invite-link-row { display: flex; gap: 8px; align-items: center; }
 .invite-link-row .input { margin-bottom: 0; }
-.invite-section { border-top: 1px solid var(--border); padding-top: 16px; margin-top: 8px; }
+
+/* ===== MEMBER STATUS BADGES ===== */
+.member-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.member-status {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 20px;
+  display: inline-block;
+  width: fit-content;
+}
+.member-status-active   { background: #d4edda; color: #2d6a4f; }
+.member-status-pending  { background: #fff3cd; color: #856404; }
+.member-status-name-only{ background: var(--surface2); color: var(--text3); border: 1px solid var(--border); }
+
+/* ===== JOIN PRESET NAME ===== */
+.join-preset-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+  padding: 10px 0 16px;
+}
 
 .color-input {
   width: 42px;

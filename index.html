@@ -71,10 +71,17 @@
       <!-- JOIN STATE (shown when ?invite= param present) -->
       <div id="setup-join-state" class="hidden">
         <h1 class="auth-title">You're invited!<br/><em id="join-family-display-name"></em></h1>
-        <p class="auth-sub">Enter your name to join the family.</p>
+        <p class="auth-sub" id="join-sub-text">Enter your name to join the family.</p>
 
-        <label class="field-label">Your name</label>
-        <input type="text" id="join-member-name" class="input" placeholder="e.g. Mom, Dad, your first name" />
+        <div id="join-name-input-row">
+          <label class="field-label">Your name</label>
+          <input type="text" id="join-member-name" class="input" placeholder="e.g. Mom, Dad, your first name" />
+        </div>
+
+        <div id="join-name-display-row" class="hidden">
+          <label class="field-label">Joining as</label>
+          <p id="join-preset-name" class="join-preset-name"></p>
+        </div>
 
         <button class="btn btn-primary full-width" onclick="joinFamily()">Join Family →</button>
       </div>
@@ -167,36 +174,37 @@
         <button class="modal-close" onclick="closeMembersModal()">✕</button>
       </div>
       <div class="modal-body">
-        <p class="help-text">Add family members who will appear in task assignments. Members don't need a login.</p>
         <div id="members-list" class="members-list"></div>
-        <div class="add-member-row">
-          <input type="text" id="new-member-name" class="input" placeholder="Member name" />
-          <button class="btn btn-primary" onclick="addMember()">Add</button>
-        </div>
-        <div class="color-swatches">
-          <span class="swatch-label">Color:</span>
-          <div class="swatch-row">
-            <div class="color-swatch selected" data-color="#4f86f7" style="background:#4f86f7" onclick="selectMemberColor('#4f86f7')" title="Blue"></div>
-            <div class="color-swatch" data-color="#2d6a4f" style="background:#2d6a4f" onclick="selectMemberColor('#2d6a4f')" title="Green"></div>
-            <div class="color-swatch" data-color="#f4845f" style="background:#f4845f" onclick="selectMemberColor('#f4845f')" title="Coral"></div>
-            <div class="color-swatch" data-color="#9b59b6" style="background:#9b59b6" onclick="selectMemberColor('#9b59b6')" title="Purple"></div>
-            <div class="color-swatch" data-color="#e67e22" style="background:#e67e22" onclick="selectMemberColor('#e67e22')" title="Orange"></div>
-            <div class="color-swatch" data-color="#e91e8c" style="background:#e91e8c" onclick="selectMemberColor('#e91e8c')" title="Pink"></div>
-            <div class="color-swatch" data-color="#1abc9c" style="background:#1abc9c" onclick="selectMemberColor('#1abc9c')" title="Teal"></div>
-            <div class="color-swatch" data-color="#c0392b" style="background:#c0392b" onclick="selectMemberColor('#c0392b')" title="Red"></div>
-          </div>
-          <input type="hidden" id="selected-member-color" value="#4f86f7" />
-        </div>
-        <div id="members-modal-error" class="auth-error hidden"></div>
 
-        <div class="invite-section">
-          <p class="field-label" style="margin-top:20px;margin-bottom:4px">Invite Link</p>
-          <p class="help-text" style="margin-bottom:8px">Share this link so others can join with their own Google account.</p>
-          <div class="invite-link-row">
-            <input type="text" id="invite-link-input" class="input" readonly style="font-size:12px;flex:1" />
-            <button id="copy-invite-btn" class="btn btn-outline btn-sm" onclick="copyInviteLink()">Copy</button>
+        <div class="add-member-section">
+          <p class="field-label" style="margin-bottom:8px">Add a member</p>
+          <input type="text" id="new-member-name" class="input" placeholder="Name" style="margin-bottom:10px" />
+          <div class="color-swatches" style="margin-bottom:12px">
+            <span class="swatch-label">Color:</span>
+            <div class="swatch-row">
+              <div class="color-swatch selected" data-color="#4f86f7" style="background:#4f86f7" onclick="selectMemberColor('#4f86f7')" title="Blue"></div>
+              <div class="color-swatch" data-color="#2d6a4f" style="background:#2d6a4f" onclick="selectMemberColor('#2d6a4f')" title="Green"></div>
+              <div class="color-swatch" data-color="#f4845f" style="background:#f4845f" onclick="selectMemberColor('#f4845f')" title="Coral"></div>
+              <div class="color-swatch" data-color="#9b59b6" style="background:#9b59b6" onclick="selectMemberColor('#9b59b6')" title="Purple"></div>
+              <div class="color-swatch" data-color="#e67e22" style="background:#e67e22" onclick="selectMemberColor('#e67e22')" title="Orange"></div>
+              <div class="color-swatch" data-color="#e91e8c" style="background:#e91e8c" onclick="selectMemberColor('#e91e8c')" title="Pink"></div>
+              <div class="color-swatch" data-color="#1abc9c" style="background:#1abc9c" onclick="selectMemberColor('#1abc9c')" title="Teal"></div>
+              <div class="color-swatch" data-color="#c0392b" style="background:#c0392b" onclick="selectMemberColor('#c0392b')" title="Red"></div>
+            </div>
+            <input type="hidden" id="selected-member-color" value="#4f86f7" />
           </div>
-          <button class="btn btn-ghost btn-sm" style="margin-top:6px;font-size:12px" onclick="regenerateInviteCode()">↺ Regenerate link</button>
+          <div class="add-member-actions">
+            <button class="btn btn-outline" onclick="addMember(false)">Add by name</button>
+            <button class="btn btn-primary" onclick="addMember(true)">✉ Send invite link</button>
+          </div>
+          <div id="new-invite-link-panel" class="invite-link-panel hidden">
+            <p class="help-text" style="margin-bottom:6px">Share this link with the member:</p>
+            <div class="invite-link-row">
+              <input type="text" id="new-invite-link-input" class="input" readonly style="font-size:12px;flex:1" />
+              <button class="btn btn-outline btn-sm" onclick="copyNewInviteLink()">Copy</button>
+            </div>
+          </div>
+          <div id="members-modal-error" class="auth-error hidden"></div>
         </div>
       </div>
       <div class="modal-footer">
@@ -208,6 +216,6 @@
   <!-- FIREBASE SDKs -->
   <script type="module" src="app.js"></script>
   <!-- VERSION BADGE -->
-  <div id="version-badge">v20260321.1</div>
+  <div id="version-badge">v20260321.2</div>
 </body>
 </html>
