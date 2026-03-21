@@ -462,6 +462,10 @@ function computeNextDue(dueDate, recurrence) {
   const d = new Date(base + "T12:00:00");
 
   if (recurrence === "daily") d.setDate(d.getDate() + 1);
+  else if (recurrence === "weekdays") {
+    // Advance to next weekday: skip Saturday and Sunday
+    do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0 || d.getDay() === 6);
+  }
   else if (recurrence === "weekly") d.setDate(d.getDate() + 7);
   else if (recurrence === "biweekly") d.setDate(d.getDate() + 14);
   else if (recurrence === "monthly") {
@@ -691,7 +695,7 @@ function recurringLabel(r) {
     const days = parseInt(r.split(":")[1], 10);
     return `Every ${days} day${days === 1 ? "" : "s"}`;
   }
-  return { daily: "Daily", weekly: "Weekly", biweekly: "Every 2 wks", monthly: "Monthly" }[r] || r;
+  return { daily: "Daily", weekdays: "Weekdays", weekly: "Weekly", biweekly: "Every 2 wks", monthly: "Monthly" }[r] || r;
 }
 
 function formatDate(str) {
