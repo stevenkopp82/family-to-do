@@ -20,6 +20,7 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
   collection,
   query,
   where,
@@ -55,6 +56,7 @@ let currentUserMemberId = null;  // member doc ID linked to this login
 let migrationChecked = false;    // run user-member link migration at most once
 let pendingJoinFamily = null;    // { id, name } stored during join flow
 let pendingMemberId = null;      // member doc ID to link on invite join (new flow)
+let pendingMemberCode = null;    // invite code used during join, cleared after redemption
 
 // ============================================================
 // AUTH
@@ -107,6 +109,7 @@ onAuthStateChanged(auth, async (user) => {
     migrationChecked = false;
     pendingJoinFamily = null;
     pendingMemberId = null;
+    pendingMemberCode = null;
     if (tasksUnsubscribe) tasksUnsubscribe();
     showAuth();
   }
@@ -185,7 +188,9 @@ async function showJoinFamily(code) {
   document.getElementById("setup-error").classList.add("hidden");
 
   if (code.includes(":")) {
-    // New format: FAMILYID:MEMBERINVITECODE — links to a specific pending member
+    // New format: FAMILYID:MEMBERINVITECODE — links to a specific pending member.
+    // Only the family doc is read here (no members subcollection), so this works
+    // before the new user has been granted any Firestore permissions.
     const [fid, memberCode] = code.split(":");
     try {
       const famDoc = await getDoc(doc(db, "families", fid));
@@ -194,20 +199,20 @@ async function showJoinFamily(code) {
         document.getElementById("setup-join-state").classList.add("hidden");
         return;
       }
-      const membersSnap = await getDocs(collection(db, "families", fid, "members"));
-      const memberDoc = membersSnap.docs.find((d) => d.data().inviteCode === memberCode);
-      if (!memberDoc) {
+      const entry = (famDoc.data().memberInvites || {})[memberCode];
+      if (!entry || !entry.memberId) {
         showSetupError("This invite link is invalid or has been regenerated.");
         document.getElementById("setup-join-state").classList.add("hidden");
         return;
       }
       pendingJoinFamily = { id: fid, name: famDoc.data().name };
-      pendingMemberId = memberDoc.id;
+      pendingMemberId = entry.memberId;
+      pendingMemberCode = memberCode;
       document.getElementById("join-family-display-name").textContent = famDoc.data().name;
-      document.getElementById("join-sub-text").textContent = `You're joining as ${memberDoc.data().name}.`;
+      document.getElementById("join-sub-text").textContent = `You're joining as ${entry.name}.`;
       document.getElementById("join-name-input-row").classList.add("hidden");
       document.getElementById("join-name-display-row").classList.remove("hidden");
-      document.getElementById("join-preset-name").textContent = memberDoc.data().name;
+      document.getElementById("join-preset-name").textContent = entry.name;
     } catch (e) {
       console.error("[Join] Failed to look up invite:", e.code, e.message);
       showSetupError("Failed to look up invite link. Please try again.");
@@ -266,6 +271,11 @@ window.joinFamily = async function () {
         userId: uid,
         inviteCode: null,
       });
+      if (pendingMemberCode) {
+        await updateDoc(doc(db, "families", fid), {
+          [`memberInvites.${pendingMemberCode}`]: deleteField(),
+        });
+      }
       currentUserMemberId = pendingMemberId;
     } else {
       // Old flow: create a new member (backward compat with family-level invite links)
@@ -1069,14 +1079,20 @@ window.renderMembersList = function(editingId = null) {
     const status = m.status || "active";
     const statusBadge = {
       active:      `<span class="member-status member-status-active">Joined</span>`,
-      pending:     `<span class="member-status member-status-pending">Invite sent</span>`,
+      pending:     `<span class="member-status member-status-pending">Not yet joined</span>`,
       "name-only": `<span class="member-status member-status-name-only">No account</span>`,
     }[status] || `<span class="member-status member-status-active">Joined</span>`;
 
     const inviteBtn = status === "name-only"
-      ? `<button class="member-action-btn" data-invite-btn="${m.id}" onclick="sendMemberInvite('${m.id}')" title="Send invite link">✉</button>`
+      ? `<button class="member-action-btn" data-invite-btn="${m.id}" onclick="sendMemberInvite('${m.id}')" title="Generate and copy invite link">🔗</button>`
       : status === "pending"
       ? `<button class="member-action-btn" data-copy-btn="${m.id}" onclick="copyMemberInviteLink('${m.id}')" title="Copy invite link">🔗</button>`
+      : "";
+
+    const inviteNote = status === "pending"
+      ? `<span class="member-invite-note">Copy 🔗 and send to this member</span>`
+      : status === "name-only"
+      ? `<span class="member-invite-note">Generate a 🔗 invite link to let them join</span>`
       : "";
 
     return `<div class="member-row">
@@ -1084,6 +1100,7 @@ window.renderMembersList = function(editingId = null) {
       <div class="member-info">
         <span class="member-name">${escHtml(m.name)}</span>
         ${statusBadge}
+        ${inviteNote}
       </div>
       <div style="display:flex;gap:4px;margin-left:auto">
         ${inviteBtn}
@@ -1127,23 +1144,26 @@ window.addMember = async function (withInvite = false) {
   const inviteCode = withInvite ? generateInviteCode() : null;
 
   try {
-    await addDoc(collection(db, "families", familyId, "members"), {
+    const memberRef = await addDoc(collection(db, "families", familyId, "members"), {
       name,
       color: colorEl.value || randomColor(),
       status: withInvite ? "pending" : "name-only",
       ...(inviteCode ? { inviteCode } : {}),
       createdAt: serverTimestamp(),
     });
-    nameEl.value = "";
-    window.selectMemberColor("#4f86f7");
 
     if (withInvite) {
+      await updateDoc(doc(db, "families", familyId), {
+        [`memberInvites.${inviteCode}`]: { memberId: memberRef.id, name },
+      });
       const link = memberInviteLink(familyId, inviteCode);
       document.getElementById("new-invite-link-input").value = link;
       document.getElementById("new-invite-link-panel").classList.remove("hidden");
     } else {
       document.getElementById("new-invite-link-panel").classList.add("hidden");
     }
+    nameEl.value = "";
+    window.selectMemberColor("#4f86f7");
   } catch (e) {
     console.error("[Member] Failed to add member:", e.code, e.message);
     errorEl.textContent = `Failed to add member: ${e.message}`;
@@ -1156,16 +1176,24 @@ function memberInviteLink(fid, code) {
 }
 
 window.sendMemberInvite = async function (memberId) {
-  const inviteCode = generateInviteCode();
+  const member = members.find((m) => m.id === memberId);
+  if (!member) return;
+  const oldCode = member.inviteCode || null;
+  const newCode = generateInviteCode();
   try {
     await updateDoc(doc(db, "families", familyId, "members", memberId), {
       status: "pending",
-      inviteCode,
+      inviteCode: newCode,
     });
-    const link = memberInviteLink(familyId, inviteCode);
+    const familyUpdates = {
+      [`memberInvites.${newCode}`]: { memberId, name: member.name },
+    };
+    if (oldCode) familyUpdates[`memberInvites.${oldCode}`] = deleteField();
+    await updateDoc(doc(db, "families", familyId), familyUpdates);
+    const link = memberInviteLink(familyId, newCode);
     await navigator.clipboard.writeText(link);
     const btn = document.querySelector(`[data-invite-btn="${memberId}"]`);
-    if (btn) { btn.textContent = "Copied!"; setTimeout(() => { btn.textContent = "Send invite"; }, 2000); }
+    if (btn) { btn.textContent = "Copied!"; setTimeout(() => { btn.textContent = "Copy link"; }, 2000); }
   } catch (e) {
     console.error("[Invite] Failed to generate invite:", e);
   }

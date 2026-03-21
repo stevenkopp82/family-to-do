@@ -493,6 +493,7 @@ select.input { cursor: pointer; }
 .member-status-active   { background: #d4edda; color: #2d6a4f; }
 .member-status-pending  { background: #fff3cd; color: #856404; }
 .member-status-name-only{ background: var(--surface2); color: var(--text3); border: 1px solid var(--border); }
+.member-invite-note { font-size: 10px; color: var(--text3); font-style: italic; }
 
 /* ===== JOIN PRESET NAME ===== */
 .join-preset-name {
