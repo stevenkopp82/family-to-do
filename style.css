@@ -495,6 +495,19 @@ select.input { cursor: pointer; }
 .member-status-name-only{ background: var(--surface2); color: var(--text3); border: 1px solid var(--border); }
 .member-invite-note { font-size: 10px; color: var(--text3); font-style: italic; }
 
+/* ===== BETA BADGE ===== */
+.beta-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: var(--accent2, #f4845f);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+
 /* ===== JOIN PRESET NAME ===== */
 .join-preset-name {
   font-size: 18px;
