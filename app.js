@@ -332,11 +332,11 @@ window.signInWithGoogle = async function () {
 };
 
 window.createFamily = async function () {
-  const familyName = document.getElementById("setup-family-name").value.trim();
+  const inputFamilyName = document.getElementById("setup-family-name").value.trim();
   const memberName = document.getElementById("setup-member-name").value.trim();
   clearSetupError();
 
-  if (!familyName || !memberName) {
+  if (!inputFamilyName || !memberName) {
     return showSetupError("Please fill in both fields.");
   }
 
@@ -348,7 +348,7 @@ window.createFamily = async function () {
     // Create family document
     const familyRef = doc(collection(db, "families"));
     await setDoc(familyRef, {
-      name: familyName,
+      name: inputFamilyName,
       ownerId: uid,
       inviteCode,
       createdAt: serverTimestamp(),
@@ -377,7 +377,7 @@ window.createFamily = async function () {
     await updateDoc(doc(db, "users", uid), { memberId: memberRef.id });
 
     familyId = familyRef.id;
-    familyName = document.getElementById("setup-family-name").value.trim();
+    familyName = inputFamilyName;
     currentUserMemberId = memberRef.id;
     localStorage.setItem("familyId_" + currentUser.uid, familyRef.id);
     document.getElementById("header-family-name").textContent = familyName;
