@@ -20,7 +20,6 @@ import {
   addDoc,
   updateDoc,
   deleteDoc,
-  deleteField,
   collection,
   query,
   where,
@@ -53,6 +52,7 @@ let activeFilter = "all";
 let editingTaskId = null;
 let tasksUnsubscribe = null;
 let currentUserMemberId = null;  // member doc ID linked to this login
+let familyName = null;           // cached family display name
 let migrationChecked = false;    // run user-member link migration at most once
 let pendingJoinFamily = null;    // { id, name } stored during join flow
 let pendingMemberId = null;      // member doc ID to link on invite join (new flow)
@@ -84,8 +84,8 @@ onAuthStateChanged(auth, async (user) => {
       try {
         const familyDoc = await getDoc(doc(db, "families", familyId));
         if (familyDoc.exists()) {
-          document.getElementById("header-family-name").textContent =
-            familyDoc.data().name;
+          familyName = familyDoc.data().name;
+          document.getElementById("header-family-name").textContent = familyName;
           console.log("[Auth] Family loaded:", familyDoc.data().name);
         } else {
           console.warn("[Auth] Family doc not found for id:", familyId);
@@ -110,6 +110,7 @@ onAuthStateChanged(auth, async (user) => {
     pendingJoinFamily = null;
     pendingMemberId = null;
     pendingMemberCode = null;
+    familyName = null;
     if (tasksUnsubscribe) tasksUnsubscribe();
     showAuth();
   }
@@ -153,7 +154,8 @@ async function showFamilySetup() {
           createdAt: serverTimestamp(),
         });
         familyId = cachedFamilyId;
-        document.getElementById("header-family-name").textContent = famDoc.data().name;
+        familyName = famDoc.data().name;
+        document.getElementById("header-family-name").textContent = familyName;
         showApp();
         subscribeToData();
         return;
@@ -188,42 +190,28 @@ async function showJoinFamily(code) {
   document.getElementById("setup-error").classList.add("hidden");
 
   if (code.includes(":")) {
-    // New format: FAMILYID:MEMBERINVITECODE
-    // A brand-new user has no users doc yet, so Firestore rules block all family reads.
-    // Fix: write a temporary users doc with just familyId first — that grants read
-    // access. If the invite turns out to be invalid we delete it and show an error.
-    const [fid, memberCode] = code.split(":");
-    const uid = currentUser.uid;
-    let wroteUsersDoc = false;
+    // New format: FAMILYID:MEMBERCODE
+    // Read from top-level invites collection — readable by any authenticated user,
+    // no family membership required.
+    const [, memberCode] = code.split(":");
     try {
-      await setDoc(doc(db, "users", uid), { familyId: fid, createdAt: serverTimestamp() });
-      wroteUsersDoc = true;
-
-      const famDoc = await getDoc(doc(db, "families", fid));
-      if (!famDoc.exists()) {
-        await deleteDoc(doc(db, "users", uid));
-        showSetupError("This invite link is invalid or has expired.");
-        document.getElementById("setup-join-state").classList.add("hidden");
-        return;
-      }
-      const entry = (famDoc.data().memberInvites || {})[memberCode];
-      if (!entry || !entry.memberId) {
-        await deleteDoc(doc(db, "users", uid));
+      const inviteSnap = await getDoc(doc(db, "invites", memberCode));
+      if (!inviteSnap.exists()) {
         showSetupError("This invite link is invalid or has been regenerated.");
         document.getElementById("setup-join-state").classList.add("hidden");
         return;
       }
-      pendingJoinFamily = { id: fid, name: famDoc.data().name };
-      pendingMemberId = entry.memberId;
+      const invite = inviteSnap.data();
+      pendingJoinFamily = { id: invite.familyId, name: invite.familyName };
+      pendingMemberId = invite.memberId;
       pendingMemberCode = memberCode;
-      document.getElementById("join-family-display-name").textContent = famDoc.data().name;
-      document.getElementById("join-sub-text").textContent = `You're joining as ${entry.name}.`;
+      document.getElementById("join-family-display-name").textContent = invite.familyName;
+      document.getElementById("join-sub-text").textContent = `You're joining as ${invite.memberName}.`;
       document.getElementById("join-name-input-row").classList.add("hidden");
       document.getElementById("join-name-display-row").classList.remove("hidden");
-      document.getElementById("join-preset-name").textContent = entry.name;
+      document.getElementById("join-preset-name").textContent = invite.memberName;
     } catch (e) {
       console.error("[Join] Failed to look up invite:", e.code, e.message);
-      if (wroteUsersDoc) await deleteDoc(doc(db, "users", uid)).catch(() => {});
       showSetupError("Failed to look up invite link. Please try again.");
       document.getElementById("setup-join-state").classList.add("hidden");
     }
@@ -258,17 +246,20 @@ window.joinFamily = async function () {
   clearSetupError();
   if (!pendingJoinFamily) return showSetupError("Something went wrong. Please try the link again.");
 
-  const { id: fid, name: familyName } = pendingJoinFamily;
+  const { id: fid, name: joinFamilyName } = pendingJoinFamily;
   const uid = currentUser.uid;
 
   try {
     if (pendingMemberId) {
-      // New flow: users doc was already written in showJoinFamily — just complete it
+      // New flow: link Google account to an existing pending member
       const memberName = document.getElementById("join-preset-name").textContent;
-      await updateDoc(doc(db, "users", uid), {
+      // Write users doc first — establishes familyId so rules allow the member update
+      await setDoc(doc(db, "users", uid), {
         name: memberName,
         email: currentUser.email || "",
+        familyId: fid,
         memberId: pendingMemberId,
+        createdAt: serverTimestamp(),
       });
       await updateDoc(doc(db, "families", fid, "members", pendingMemberId), {
         status: "active",
@@ -276,9 +267,7 @@ window.joinFamily = async function () {
         inviteCode: null,
       });
       if (pendingMemberCode) {
-        await updateDoc(doc(db, "families", fid), {
-          [`memberInvites.${pendingMemberCode}`]: deleteField(),
-        });
+        await deleteDoc(doc(db, "invites", pendingMemberCode));
       }
       currentUserMemberId = pendingMemberId;
     } else {
@@ -304,6 +293,7 @@ window.joinFamily = async function () {
     }
 
     familyId = fid;
+    familyName = joinFamilyName;
     localStorage.setItem("familyId_" + uid, fid);
     document.getElementById("header-family-name").textContent = familyName;
     history.replaceState({}, "", window.location.pathname);
@@ -383,6 +373,7 @@ window.createFamily = async function () {
     });
 
     familyId = familyRef.id;
+    familyName = document.getElementById("setup-family-name").value.trim();
     currentUserMemberId = memberRef.id;
     localStorage.setItem("familyId_" + currentUser.uid, familyRef.id);
     document.getElementById("header-family-name").textContent = familyName;
@@ -1157,8 +1148,11 @@ window.addMember = async function (withInvite = false) {
     });
 
     if (withInvite) {
-      await updateDoc(doc(db, "families", familyId), {
-        [`memberInvites.${inviteCode}`]: { memberId: memberRef.id, name },
+      await setDoc(doc(db, "invites", inviteCode), {
+        familyId,
+        familyName: familyName || "",
+        memberId: memberRef.id,
+        memberName: name,
       });
       const link = memberInviteLink(familyId, inviteCode);
       document.getElementById("new-invite-link-input").value = link;
@@ -1189,11 +1183,13 @@ window.sendMemberInvite = async function (memberId) {
       status: "pending",
       inviteCode: newCode,
     });
-    const familyUpdates = {
-      [`memberInvites.${newCode}`]: { memberId, name: member.name },
-    };
-    if (oldCode) familyUpdates[`memberInvites.${oldCode}`] = deleteField();
-    await updateDoc(doc(db, "families", familyId), familyUpdates);
+    await setDoc(doc(db, "invites", newCode), {
+      familyId,
+      familyName: familyName || "",
+      memberId,
+      memberName: member.name,
+    });
+    if (oldCode) await deleteDoc(doc(db, "invites", oldCode)).catch(() => {});
     const link = memberInviteLink(familyId, newCode);
     await navigator.clipboard.writeText(link);
     const btn = document.querySelector(`[data-invite-btn="${memberId}"]`);
