@@ -354,7 +354,17 @@ window.createFamily = async function () {
       createdAt: serverTimestamp(),
     });
 
-    // Add the registering user as the first family member
+    // Create user document first — the members rule requires get(users/uid).data.familyId
+    // to equal this familyId, so the users doc must exist before writing to members.
+    // memberId gets filled in below once we have it.
+    await setDoc(doc(db, "users", uid), {
+      name: memberName,
+      email: currentUser.email,
+      familyId: familyRef.id,
+      createdAt: serverTimestamp(),
+    });
+
+    // Now add the registering user as the first family member
     const memberRef = await addDoc(collection(db, "families", familyRef.id, "members"), {
       name: memberName,
       color: randomColor(),
@@ -363,14 +373,8 @@ window.createFamily = async function () {
       createdAt: serverTimestamp(),
     });
 
-    // Create user document pointing to family and member
-    await setDoc(doc(db, "users", uid), {
-      name: memberName,
-      email: currentUser.email,
-      familyId: familyRef.id,
-      memberId: memberRef.id,
-      createdAt: serverTimestamp(),
-    });
+    // Update user doc with the member ID now that we have it
+    await updateDoc(doc(db, "users", uid), { memberId: memberRef.id });
 
     familyId = familyRef.id;
     familyName = document.getElementById("setup-family-name").value.trim();
