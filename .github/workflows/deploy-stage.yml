@@ -9,17 +9,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Push to staging repo
-        uses: cpina/github-action-push-to-another-repository@v1.7.2
-        env:
-          API_TOKEN_GITHUB: ${{ secrets.STAGE_DEPLOY_TOKEN }}
-        with:
-          source-directory: '.'
-          destination-github-username: 'stevenkopp82'
-          destination-repository-name: 'family-to-do-stage'
-          user-email: stevenkopp82@gmail.com
-          target-branch: main
-          exclude-paths: |
-            android
-            node_modules
-            www
+        run: |
+          git config --global user.email "stevenkopp82@gmail.com"
+          git config --global user.name "GitHub Actions"
+          git clone https://x-access-token:${{ secrets.STAGE_DEPLOY_TOKEN }}@github.com/stevenkopp82/family-to-do-stage.git /tmp/stage-repo
+          rsync -av --exclude='.git' --exclude='android' --exclude='node_modules' --exclude='www' --exclude='.claude' . /tmp/stage-repo/
+          cd /tmp/stage-repo
+          git add -A
+          git diff --cached --quiet && echo "Nothing to commit" && exit 0
+          git commit -m "Deploy from stage branch: ${{ github.sha }}"
+          git push origin main
