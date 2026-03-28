@@ -28,12 +28,12 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAA29vEFu7gVTZSAbDwWcfwNw4hSixIPmE",
-  authDomain: "family-to-do-list-33ffa.firebaseapp.com",
-  projectId: "family-to-do-list-33ffa",
-  storageBucket: "family-to-do-list-33ffa.firebasestorage.app",
-  messagingSenderId: "1072664901116",
-  appId: "1:1072664901116:web:55369f9f89835cfb8c2e79"
+  apiKey: "AIzaSyAY1wt3GqTak2oKkXuoMo0ruItv9fA09ac",
+  authDomain: "family-to-do-stage.firebaseapp.com",
+  projectId: "family-to-do-stage",
+  storageBucket: "family-to-do-stage.firebasestorage.app",
+  messagingSenderId: "918652640486",
+  appId: "1:918652640486:web:46db8be779929e8aeeaf27"
 };
 
 // ============================================================

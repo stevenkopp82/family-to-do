@@ -1,0 +1,25 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [ stage ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Push to staging repo
+        uses: cpina/github-action-push-to-another-repository@v1.7.2
+        env:
+          API_TOKEN_GITHUB: ${{ secrets.STAGE_DEPLOY_TOKEN }}
+        with:
+          source-directory: '.'
+          destination-github-username: 'stevenkopp82'
+          destination-repository-name: 'family-to-do-stage'
+          user-email: stevenkopp82@gmail.com
+          target-branch: main
+          exclude-paths: |
+            android
+            node_modules
+            www
