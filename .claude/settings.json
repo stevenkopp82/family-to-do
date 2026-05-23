@@ -2,7 +2,14 @@
   "permissions": {
     "allow": [
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); clients=d.get\\(''''client'''',[]\\); [print\\(''''oauth_clients:'''', c.get\\(''''oauth_client'''',[]\\)\\) for c in clients]\")",
-      "Bash(npx cap:*)"
+      "Bash(npx cap:*)",
+      "Bash(Get-ChildItem C:\\\\Users\\\\steve\\\\family-to-do -Exclude node_modules)",
+      "Bash(Select-Object Name, PSIsContainer)",
+      "PowerShell(Get-ChildItem C:\\\\Users\\\\steve\\\\family-to-do | Where-Object { $_.Name -ne 'node_modules' } | Select-Object Name)",
+      "PowerShell(ls C:\\\\Users\\\\steve\\\\family-to-do | where { $_.Name -ne 'node_modules' })",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\steve\\\\family-to-do\" -Directory)",
+      "Bash(Select-Object -ExpandProperty Name)",
+      "Bash(npm test *)"
     ]
   }
 }
